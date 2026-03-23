@@ -506,6 +506,7 @@ WebhookConfig.kt         — Server configuration (port, auth token, etc.)
 ```kotlin
 data class RawInput(
     val id: String = UUID.randomUUID().toString(),
+    val traceId: String = UUID.randomUUID().toString(), // follows the input through every pipeline stage
     val text: String,
     val receivedAt: Long = System.currentTimeMillis(),
     val source: String = "pebble",
@@ -983,6 +984,8 @@ app/.../ui/pebble/InputHistoryFragment.kt
 app/.../ui/pebble/ApprovalFragment.kt
 app/.../ui/pebble/ChangeLogFragment.kt
 app/.../ui/pebble/PebbleSettingsFragment.kt
+app/.../ui/pebble/PebbleDebugFragment.kt
+app/.../ui/pebble/WebhookQrFragment.kt
 ```
 
 Each fragment:
@@ -993,15 +996,266 @@ Each fragment:
 - [ ] All fragments compile and resolve dependencies
 - [ ] Navigation between screens works end-to-end
 
+### Task 5.8: QR Code Configuration Screen
+
+**Purpose:** The phone's IP address, port, and auth token must be communicated to whatever client sends voice inputs (Pebble companion app, Tasker shortcut, automation script, etc.). Manual URL entry is error-prone; a QR code eliminates it entirely.
+
+**New dependency:** Add `io.github.alexzhirkevich:qrose` (Compose-native QR generation, no camera permission required) to `feature-pebble-ui/build.gradle.kts`.
+
+**Files to create:**
+```
+feature-pebble-ui/.../settings/WebhookQrScreen.kt
+feature-pebble-ui/.../settings/WebhookQrViewModel.kt
+```
+
+**Screen layout:**
+
+1. **QR code** (centered, large) — encodes a JSON configuration payload:
+   ```json
+   {
+     "url": "http://192.168.1.X:8391/api/v1/input",
+     "token": "your-auth-token",
+     "version": 1
+   }
+   ```
+2. **IP address selector** — lists all non-loopback IPv4 interfaces (Wi-Fi, USB tether, etc.) as a dropdown. User picks the correct one; QR regenerates instantly.
+3. **Raw URL** — shown as plain text beneath the QR; tap to copy to clipboard.
+4. **Auth token** — shown masked (`••••••••`); tap the eye icon to reveal; tap to copy.
+5. **"Send Test Input"** button — fires `{"text": "pebble setup test", "source": "test", "traceId": "<new-uuid>"}` directly to the local webhook and navigates to the Phase 6 debug trace view for that `traceId`.
+
+**`WebhookQrViewModel` responsibilities:**
+- `getLocalIpAddresses(): List<Pair<String, String>>` — enumerates `NetworkInterface` for all non-loopback IPv4 addresses, returning `(interfaceName, ipAddress)` pairs.
+- Observes `WebhookConfig` from DataStore for port and token changes.
+- Exposes `qrPayload: StateFlow<String>` (the JSON string fed to the QR composable).
+
+**Navigation:** Add `webhookQr` destination to `nav_pebble.xml`. Link from the "Connection" section of `PebbleSettingsScreen` as a "Scan to configure" row.
+
+**Acceptance criteria:**
+- [ ] QR code is scannable by a standard QR reader and produces the correct JSON
+- [ ] QR regenerates when IP or port selection changes
+- [ ] "Send Test Input" button triggers a real HTTP POST and the response trace appears in the debug screen
+- [ ] Screen works fully offline (generates QR without internet access)
+- [ ] Auth token is masked by default
+
 ---
 
-## Phase 6: Integration & End-to-End Testing
+## Phase 6: Observability & Debug Tooling
+
+**Goal:** Make every pipeline stage visible from the device itself, without a connected laptop or `adb logcat`. Failures must be diagnosable in under 2 minutes from the device alone.
+
+**Rationale:** The pipeline has 6+ distinct failure surfaces: network reception, authentication, LLM API, entity resolution, change execution, and AnyType middleware. Without structured in-app observability, any failure is a black box on a real device. This phase makes every stage inspectable, every failure actionable, and the initial setup foolproof via QR code.
+
+**When to build:** Observability infrastructure (Tasks 6.1–6.2) should be wired in *during* Phases 3–4, not after. The debug UI (Tasks 6.3–6.4) can be built alongside Phase 5. The phase is listed here so it has a clear home, but treat it as a cross-cutting concern that runs in parallel.
+
+**Depends on:** Phase 0 (module structure), Phase 3 (webhook — provides `traceId` origin)
+
+### Task 6.1: Pipeline Event Model & Store
+
+Define the shared observability model in `pebble-core` and its Room-backed store.
+
+**Files to create in `pebble-core/src/main/java/com/anytypeio/anytype/pebble/core/observability/`:**
+```
+PipelineEvent.kt          — Event data class
+PipelineStage.kt          — Stage enum
+EventStatus.kt            — SUCCESS, FAILURE, IN_PROGRESS, SKIPPED
+PipelineEventStore.kt     — Interface
+PipelineEventEntity.kt    — Room entity
+PipelineEventDao.kt       — Room DAO
+```
+
+**`PipelineStage` enum (ordered by pipeline position):**
+```kotlin
+enum class PipelineStage {
+    INPUT_RECEIVED,      // Webhook received the HTTP POST
+    INPUT_QUEUED,        // Persisted to InputQueue Room table
+    LLM_EXTRACTING,      // LLM API call dispatched
+    LLM_EXTRACTED,       // LLM returned entity list
+    ENTITY_RESOLVING,    // Matching entities against AnyType graph
+    ENTITY_RESOLVED,     // Resolution decisions finalised
+    PLAN_GENERATED,      // ChangeSet plan assembled
+    APPROVAL_PENDING,    // Awaiting user approval
+    CHANGE_APPLYING,     // ChangeExecutor dispatching operations
+    CHANGE_APPLIED,      // All operations succeeded
+    ROLLED_BACK,         // Rollback completed
+    ERROR                // Terminal failure at any stage
+}
+```
+
+**`PipelineEvent` data class:**
+```kotlin
+data class PipelineEvent(
+    val id: String = UUID.randomUUID().toString(),
+    val traceId: String,                           // links to originating RawInput.traceId
+    val stage: PipelineStage,
+    val status: EventStatus,
+    val message: String,
+    val metadata: Map<String, String> = emptyMap(), // e.g., model="claude-sonnet", entityCount="3"
+    val timestampMs: Long = System.currentTimeMillis(),
+    val durationMs: Long? = null
+)
+```
+
+**`PipelineEventStore` interface:**
+```kotlin
+interface PipelineEventStore {
+    suspend fun record(event: PipelineEvent)
+    fun getEventsForTrace(traceId: String): Flow<List<PipelineEvent>>
+    fun getRecentTraces(limit: Int = 50): Flow<List<String>>   // distinct traceIds, most recent first
+    suspend fun getFailures(sinceMs: Long): List<PipelineEvent>
+    suspend fun prune(keepCount: Int = 500)                    // called on insert; removes oldest
+}
+```
+
+The Room implementation stores events in a local database in `pebble-core`. Retention is capped at 500 events (oldest pruned on insert). No sync to AnyType — this is a local debug log only.
+
+**`traceId` propagation contract:** `traceId` flows as:
+```
+RawInput.traceId → InputQueueEntry.traceId → ChangeSet.traceId
+```
+`ChangeSet` gains a `traceId: String` field in Task 2.1 (backfill into the data model).
+
+**Acceptance criteria:**
+- [ ] `PipelineEventStore` persists, retrieves, and prunes events correctly
+- [ ] `traceId` is present on `RawInput`, `InputQueueEntry`, and `ChangeSet` (verify data classes)
+- [ ] Room migration test for event table
+- [ ] Unit test: insert 600 events → verify only 500 remain, oldest dropped
+
+### Task 6.2: Instrument the Pipeline
+
+Add `PipelineEventStore.record(...)` calls at every stage boundary. Each call is fire-and-forget (`launch { store.record(...) }`), never blocking the pipeline itself.
+
+**Instrumentation points:**
+
+| File | Stage emitted | Key metadata |
+|------|--------------|--------------|
+| `WebhookRoutes.kt` | `INPUT_RECEIVED` | `remoteIp`, `bodyLength` |
+| `PersistentInputQueue.kt` | `INPUT_QUEUED` | `queueDepth` |
+| `EntityExtractor.kt` (start) | `LLM_EXTRACTING` | `model`, `promptTokens` |
+| `EntityExtractor.kt` (success) | `LLM_EXTRACTED` | `entityCount`, `durationMs` |
+| `EntityExtractor.kt` (failure) | `ERROR` | `errorClass`, `errorMessage`, `httpStatus` |
+| `EntityResolver.kt` (start) | `ENTITY_RESOLVING` | `entityCount` |
+| `EntityResolver.kt` (done) | `ENTITY_RESOLVED` | `matched`, `new`, `disambiguationNeeded` |
+| `PlanGenerator.kt` | `PLAN_GENERATED` | `operationCount`, `createCount`, `updateCount` |
+| `ChangeExecutor.kt` (start) | `CHANGE_APPLYING` | `operationCount` |
+| `ChangeExecutor.kt` (success) | `CHANGE_APPLIED` | `durationMs` |
+| `ChangeExecutor.kt` (failure) | `ERROR` | `failedOperationIndex`, `errorClass`, `errorMessage` |
+| `ChangeRollback.kt` (done) | `ROLLED_BACK` | `operationsRolledBack`, `conflictsSkipped` |
+| Approval ViewModel (user action) | `APPROVAL_PENDING` → transition | `decision=APPROVED\|REJECTED` |
+
+**Log tag discipline (for `adb logcat` during development):**
+
+All Timber calls in Pebble modules MUST use a tagged wrapper:
+```kotlin
+// Each module defines its own tag constant
+private const val TAG = "Pebble:Webhook"   // or Assimilation, ChangeControl, Core
+
+// Every pipeline log line includes the traceId
+Timber.tag(TAG).d("[trace=$traceId] INPUT_RECEIVED | remoteIp=$ip | bodyLength=$len")
+Timber.tag(TAG).e("[trace=$traceId] ERROR at LLM_EXTRACTING | ${e.message}")
+```
+
+Filter during development: `adb logcat -s "Pebble:Webhook" "Pebble:Assimilation" "Pebble:ChangeControl"`
+
+**PII policy:** User note content (the actual transcribed text) MUST NOT appear in logs at DEBUG or higher. Log it at VERBOSE level only, and strip VERBOSE from release builds via ProGuard/R8.
+
+**Acceptance criteria:**
+- [ ] Sending one test input produces ≥ 8 `PipelineEvent` records end-to-end
+- [ ] A bad LLM API key produces an `ERROR` event with `httpStatus=401` in metadata
+- [ ] An unreachable LLM produces an `ERROR` event with `errorClass=ConnectException` in metadata
+- [ ] All events for a single input share the same `traceId`
+- [ ] No user note content appears in any log at DEBUG or above
+
+### Task 6.3: In-App Debug Trace Screen
+
+**Purpose:** Diagnose failures on a real device without any connected tools.
+
+**Files to create:**
+```
+feature-pebble-ui/.../debug/PebbleDebugScreen.kt
+feature-pebble-ui/.../debug/PebbleDebugViewModel.kt
+```
+
+**Screen layout (three sections):**
+
+**Section 1 — System Health bar (always visible at top):**
+
+| Indicator | Green | Yellow | Red |
+|-----------|-------|--------|-----|
+| Webhook | Running, last request < 5 min ago | Running, no recent requests | Stopped or failed to bind |
+| LLM | Last call succeeded | No calls yet | Last call failed |
+| Queue | 0 pending | 1–5 pending | > 5 pending |
+| Last error | None | Warning | Error in last 10 min |
+
+Tapping any indicator scrolls to the most recent relevant trace event.
+
+**Section 2 — Trace List:**
+- Each row: input text (first 60 chars), relative time ("2 min ago"), overall status dot (green/yellow/red), stage summary ("Applied — 5 ops")
+- Most recent first; paginated (load 20, load more on scroll)
+- Tap to expand into a timeline:
+
+```
+ ✓  INPUT_RECEIVED     14:32:01.002   +0ms
+ ✓  INPUT_QUEUED       14:32:01.005   +3ms
+ ✓  LLM_EXTRACTING     14:32:01.010   +8ms   (model: claude-sonnet)
+ ✓  LLM_EXTRACTED      14:32:03.351   +2341ms  (3 entities)
+ ✓  ENTITY_RESOLVED    14:32:03.800   +449ms   (2 matched, 1 new)
+ ✓  PLAN_GENERATED     14:32:03.812   +12ms    (5 ops)
+ …  APPROVAL_PENDING   14:32:03.812   (waiting for user)
+```
+
+Failed stages render in red with the error message inline. Tapping a failed stage expands the full metadata map.
+
+**Section 3 — Export:**
+- "Share Debug Log" button — serialises the last 100 events (all traces) as JSON and invokes `ACTION_SEND` via the Android share sheet. The JSON is human-readable and contains no PII (input text is truncated to 30 chars in exports).
+
+**Navigation:** Accessible from `pebbleHome` dashboard (tap the health bar) and from `PebbleSettingsScreen` ("Debug & Logs" row). Add `pebbleDebug` destination to `nav_pebble.xml`.
+
+**Acceptance criteria:**
+- [ ] Health bar reflects live webhook/LLM/queue state within 5 seconds of a change
+- [ ] Expanding a trace shows all recorded stages in chronological order with durations
+- [ ] Red failed stage shows error class and message without requiring a developer to interpret it
+- [ ] "Share Debug Log" produces valid JSON via share sheet
+- [ ] Screen updates in real-time as new events arrive (Flow-backed ViewModel)
+- [ ] Works with zero connectivity (reads from local Room only)
+
+### Task 6.4: Actionable Error Notifications
+
+**Purpose:** Surface actionable failures proactively without requiring the user to open the debug screen.
+
+**File to create:**
+- `feature-pebble-ui/.../notifications/PebbleErrorNotification.kt`
+
+**Error scenarios and notification content:**
+
+| Failure trigger | Title | Body | Tap action |
+|----------------|-------|------|-----------|
+| LLM API 401 | "Pebble: API key rejected" | "Check your LLM API key in Settings" | → PebbleSettingsScreen |
+| LLM API 429 | "Pebble: LLM rate limited" | "Input queued — will retry automatically" | → PebbleDebugScreen |
+| LLM network timeout | "Pebble: LLM unreachable" | "Check internet connection; input is queued" | → PebbleDebugScreen |
+| Webhook port conflict | "Pebble: Server failed to start" | "Port 8391 already in use — change in Settings" | → PebbleSettingsScreen |
+| Change set apply failed | "Pebble: Changes not saved" | "Tap to review and retry" | → ChangeLogScreen |
+| Queue depth > 10 | "Pebble: 11 inputs waiting" | "Processing may be stalled — check Debug" | → PebbleDebugScreen |
+
+**Implementation notes:**
+- Notifications use a dedicated `PEBBLE_ERROR` notification channel (created on app start).
+- Use `setOnlyAlertOnce(true)` per error type so a persistent failure doesn't spam.
+- Dismiss-on-fix: when a previously errored stage succeeds (e.g., LLM call succeeds after a 401), cancel the corresponding notification.
+
+**Acceptance criteria:**
+- [ ] Each error scenario above produces the correct notification within 5 seconds
+- [ ] Notifications have correct `PendingIntent` to navigate to the right screen
+- [ ] A fixed error (e.g., correct API key saved → successful LLM call) cancels the API key notification
+- [ ] No duplicate notifications for the same ongoing error
+
+---
+
+## Phase 7: Integration & End-to-End Testing
 
 **Goal:** Wire all phases together and validate the full pipeline from webhook to graph mutation.
 
-**Depends on:** Phases 0–5
+**Depends on:** Phases 0–6
 
-### Task 6.1: Full Pipeline Integration
+### Task 7.1: Full Pipeline Integration
 
 Connect the webhook service → input processor → assimilation engine → change control → AnyType graph.
 
@@ -1016,7 +1270,7 @@ Connect the webhook service → input processor → assimilation engine → chan
 - [ ] Rollback of the change set removes created objects
 - [ ] Auto-approve mode: high-confidence plan applied without user interaction
 
-### Task 6.2: End-to-End Test Scenarios
+### Task 7.2: End-to-End Test Scenarios
 
 Write integration tests for key scenarios:
 
@@ -1036,7 +1290,7 @@ Write integration tests for key scenarios:
 - [ ] Tests are repeatable (clean up after each)
 - [ ] `make test_debug_all` passes
 
-### Task 6.3: Notification Integration
+### Task 7.3: Notification Integration
 
 - Pending plan notification: "Voice input processed — tap to review"
 - Auto-applied notification: "Applied changes from 'Aarav has a basketball game...' — [Undo]"
@@ -1047,7 +1301,7 @@ Write integration tests for key scenarios:
 - [ ] Undo action triggers rollback
 - [ ] Notification cleared after user action
 
-### Task 6.4: Entry Point — Home Screen Access
+### Task 7.4: Entry Point — Home Screen Access
 
 Add an entry point to the pebble dashboard from AnyType's home screen. Options (in order of preference):
 1. FAB (floating action button) or menu item on home screen → navigate to pebble dashboard.
@@ -1063,26 +1317,27 @@ Add an entry point to the pebble dashboard from AnyType's home screen. Options (
 ## Phase Summary & Dependencies
 
 ```
-Phase 0: Scaffolding & DI Bridge    ───────────────────────┐
-    │                                                       │
-    ├──→ Phase 1: Taxonomy & Schema Bootstrap               │
-    │        │                                              │
-    ├──→ Phase 2: Change Control Layer                      │
-    │        │                                              │  All phases feed into
-    ├──→ Phase 3: Webhook Service                           │  Phase 6
-    │        │                                              │
-    └──→ Phase 4: Assimilation Engine                       │
-             │                                              │
-             └──→ Phase 5: UI Layer ────────────────────────┘
-                      │                                     
-                      └──→ Phase 6: Integration & E2E Testing
+Phase 0: Scaffolding & DI Bridge    ─────────────────────────────┐
+    │                                                             │
+    ├──→ Phase 1: Taxonomy & Schema Bootstrap                     │
+    │        │                                                    │
+    ├──→ Phase 2: Change Control Layer                            │
+    │        │                                                    │  All phases
+    ├──→ Phase 3: Webhook Service ──→ Phase 6: Observability ─────┤  feed into
+    │        │                    (wired throughout 3–5)          │  Phase 7
+    └──→ Phase 4: Assimilation Engine                             │
+             │                                                    │
+             └──→ Phase 5: UI Layer ─────────────────────────────┘
+                      │
+                      └──→ Phase 7: Integration & E2E Testing
 ```
 
 **Parallelization opportunities:**
 - Phases 1, 2, 3 can proceed in parallel after Phase 0 completes.
 - Phase 4 depends on Phase 1 (taxonomy) and Phase 2 (change set model) for data models.
 - Phase 5 can start UI scaffolding after Phase 0 but needs Phases 1–4 for real data.
-- Phase 6 requires all prior phases.
+- **Phase 6 (Observability)** runs in parallel with Phases 3–5: the event store (Tasks 6.1–6.2) is wired during Phase 3/4 development; the debug UI (Tasks 6.3–6.4) is built alongside Phase 5.
+- Phase 7 requires all prior phases.
 
 ---
 
@@ -1097,6 +1352,8 @@ Phase 0: Scaffolding & DI Bridge    ──────────────�
 | Room + AnyType dual storage consistency | Medium | Medium | AnyType is source of truth; Room is a disposable cache rebuilt on mismatch |
 | Custom type creation fails (middleware limitations) | High | Low | Verify in Phase 1 with prototype; fallback to using generic Page type with tags |
 | Change set storage overhead at scale (100s of change sets as AnyType objects) | Low | Medium | Archival policy; lazy loading in UI; Room cache for queries |
+| Silent failures on-device (no debugger attached) | High | High | **Mitigated by Phase 6**: `PipelineEventStore` captures every stage; debug screen surfaces failures; error notifications provide immediate actionable hints |
+| Phone IP address changes (DHCP reassignment breaks QR config) | Low | Medium | QR screen shows live IP from `NetworkInterface`; "Send Test Input" instantly validates connectivity after reconfiguration |
 
 ---
 
@@ -1106,10 +1363,11 @@ For a coding agent executing iteratively:
 
 1. **Phase 0** (Tasks 0.1 → 0.5) — must be first and complete
 2. **Phase 1** (Tasks 1.1 → 1.5) — enables taxonomy for all downstream work
-3. **Phase 2** (Tasks 2.1 → 2.6) — change control is the backbone
-4. **Phase 3** (Tasks 3.1 → 3.5) — webhook service (can overlap with Phase 2)
-5. **Phase 4** (Tasks 4.1 → 4.8) — assimilation engine (heaviest phase)
-6. **Phase 5** (Tasks 5.1 → 5.7) — UI layer
-7. **Phase 6** (Tasks 6.1 → 6.4) — integration and polish
+3. **Phase 2** (Tasks 2.1 → 2.6) — change control is the backbone; add `traceId` to `ChangeSet` data model here
+4. **Phase 3** (Tasks 3.1 → 3.5) — webhook service (can overlap with Phase 2); wire Phase 6 Tasks 6.1–6.2 (event store + instrumentation) at the end of this phase
+5. **Phase 4** (Tasks 4.1 → 4.8) — assimilation engine (heaviest phase); instrument each stage as it's built
+6. **Phase 5** (Tasks 5.1 → 5.8) — UI layer; build Phase 6 Tasks 6.3–6.4 (debug screen + error notifications) in parallel
+7. **Phase 6** (Tasks 6.1 → 6.4) — observability; mark complete once instrumentation + debug UI are verified end-to-end
+8. **Phase 7** (Tasks 7.1 → 7.4) — integration and polish; use the debug screen to diagnose E2E test failures
 
-Total estimated tasks: **36 tasks across 7 phases.**
+Total estimated tasks: **44 tasks across 8 phases.**
