@@ -106,6 +106,9 @@ import com.anytypeio.anytype.di.feature.widgets.DaggerCreateChatObjectComponent
 import com.anytypeio.anytype.di.feature.oswidgets.DaggerCreateObjectWidgetConfigComponent
 import com.anytypeio.anytype.di.feature.oswidgets.DaggerDataViewWidgetConfigComponent
 import com.anytypeio.anytype.di.feature.oswidgets.DaggerObjectShortcutWidgetConfigComponent
+// region Pebble PKM Integration
+import com.anytypeio.anytype.di.feature.pebble.DaggerPebbleComponent
+// endregion
 import com.anytypeio.anytype.di.feature.widgets.DaggerSelectWidgetSourceComponent
 import com.anytypeio.anytype.di.feature.widgets.DaggerSelectWidgetTypeComponent
 import com.anytypeio.anytype.di.main.MainComponent
@@ -1191,6 +1194,14 @@ class ComponentManager(
             .factory()
             .create(findComponentDependencies())
     }
+
+    // region Pebble PKM Integration
+    val pebbleComponent = Component {
+        DaggerPebbleComponent
+            .factory()
+            .create(findComponentDependencies())
+    }
+    // endregion
 
     class Component<T>(private val builder: () -> T) {
 

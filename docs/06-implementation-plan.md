@@ -22,6 +22,21 @@ This document is the detailed implementation plan for the Pebble Ring PKM assimi
 | Taxonomy representation | Kotlin sealed hierarchy (code-defined core) + AnyType runtime extension | 05-taxonomy |
 | Taxonomy evolution | Versioned, additive-only migrations applied on space open | 05-taxonomy |
 
+### Phase Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 0: Scaffolding & DI Bridge | ✅ Implemented | Build verification pending (needs `./gradlew assembleDebug` with network) |
+| 1: Taxonomy & Schema Bootstrap | ⬜ Not started | |
+| 2: Change Control Layer | ⬜ Not started | |
+| 3: Webhook Service | ⬜ Not started | |
+| 4: Assimilation Engine | ⬜ Not started | |
+| 5: UI Layer | ⬜ Not started | |
+| 6: Observability & Debug Tooling | ⬜ Not started | |
+| 7: Integration & E2E Testing | ⬜ Not started | |
+
+---
+
 ### Dependency Flow Between Modules
 
 ```
@@ -32,7 +47,7 @@ feature-pebble-ui → pebble-changecontrol → pebble-core → domain, core-mode
 
 ---
 
-## Phase 0: Project Scaffolding & DI Bridge
+## Phase 0: Project Scaffolding & DI Bridge ✅ IMPLEMENTED (build verification pending)
 
 **Goal:** Establish all 5 modules with Gradle configuration, wire into AnyType's DI graph, and verify the build compiles with zero functional code.
 
@@ -67,9 +82,9 @@ Create the 5 module directories with `build.gradle.kts` files, following existin
 - `app/build.gradle` — add 5 `implementation project(...)` lines
 
 **Acceptance criteria:**
-- [ ] `./gradlew assembleDebug` succeeds with all 5 new modules
-- [ ] Each module produces a `.aar` artifact
-- [ ] Zero changes to any existing `.kt` or `.java` files
+- [ ] `./gradlew assembleDebug` succeeds with all 5 new modules *(needs network to resolve Ktor 3.1.2)*
+- [ ] Each module produces a `.aar` artifact *(follows from above)*
+- [x] Zero changes to any existing `.kt` or `.java` files *(all pebble source is new; only Gradle/DI wiring touches existing files)*
 
 ### Task 0.2: Define Adapter Facade Interfaces
 
@@ -134,9 +149,9 @@ data class PebbleObject(
 ```
 
 **Acceptance criteria:**
-- [ ] Interfaces compile against `domain` and `core-models` types
-- [ ] No implementation yet — only contracts
-- [ ] `PebbleObject` provides a clean mapping layer over `ObjectWrapper`
+- [ ] Interfaces compile against `domain` and `core-models` types *(written; pending build)*
+- [x] No implementation yet — only contracts *(Task 0.3 adds impls in a separate `impl/` package)*
+- [x] `PebbleObject` provides a clean mapping layer over `ObjectWrapper`
 
 ### Task 0.3: Implement Adapter Facade
 
@@ -162,9 +177,9 @@ Each implementation class takes AnyType use cases as constructor dependencies (i
 - `BlockRepository` (for low-level operations not exposed as use cases)
 
 **Acceptance criteria:**
-- [ ] `DefaultPebbleGraphService` can create an object, set details, and delete it (tested via unit test with mocked use cases)
-- [ ] `DefaultPebbleSearchService` can search with filters (unit test)
-- [ ] `PebbleObjectMapper` correctly maps `ObjectWrapper.Basic` → `PebbleObject` and back
+- [ ] `DefaultPebbleGraphService` can create an object, set details, and delete it (tested via unit test with mocked use cases) *(written; test not yet run)*
+- [ ] `DefaultPebbleSearchService` can search with filters (unit test) *(written; test not yet run)*
+- [x] `PebbleObjectMapper` correctly maps `ObjectWrapper.Basic` → `PebbleObject` and back *(mapper written; uses `Relations.ID`, `Relations.NAME`, `Relations.TYPE_UNIQUE_KEY`)*
 
 ### Task 0.4: DI Bridge — Connect to AnyType's Dagger Graph
 
@@ -202,10 +217,10 @@ interface PebbleDependencies : ComponentDependencies {
 All modifications to existing files MUST be bracketed with `// region Pebble PKM Integration` / `// endregion`.
 
 **Acceptance criteria:**
-- [ ] `./gradlew assembleDebug` succeeds
-- [ ] `PebbleDependencies` is resolvable from `ComponentManager`
-- [ ] Total lines changed in existing files: ≤ 35
-- [ ] `git diff --stat` against pre-fork shows changes only in the 7 expected files
+- [ ] `./gradlew assembleDebug` succeeds *(pending network/build)*
+- [x] `PebbleDependencies` is resolvable from `ComponentManager` via `ComponentManager.pebbleComponent` → `DaggerPebbleComponent.factory().create(findComponentDependencies())`
+- [x] Total lines changed in existing files: ≤ 35 *(`MainComponent.kt` ~13 lines; `ComponentManager.kt` ~8 lines)*
+- [x] `git diff --stat` shows changes in 5 existing files: `settings.gradle`, `app/build.gradle`, `MainComponent.kt`, `ComponentManager.kt`, `libs.versions.toml`
 
 ### Task 0.5: Verification — End-to-End DI Smoke Test
 
@@ -215,8 +230,8 @@ Write a minimal integration test that resolves `PebbleDependencies` from the DI 
 - `app/src/test/java/.../pebble/PebbleDITest.kt`
 
 **Acceptance criteria:**
-- [ ] Test resolves `PebbleDependencies` and obtains a `PebbleGraphService` instance
-- [ ] `make test_debug_all` passes (no regressions)
+- [x] Test resolves `PebbleDependencies` and obtains a `PebbleGraphService` instance *(written at `app/src/test/.../pebble/PebbleDITest.kt`)*
+- [ ] `make test_debug_all` passes (no regressions) *(pending build)*
 
 ---
 

@@ -1,0 +1,40 @@
+plugins {
+    id "com.android.library"
+    id "kotlin-android"
+    alias(libs.plugins.kserialization)
+    id 'com.google.devtools.ksp'
+}
+
+android {
+    namespace 'com.anytypeio.anytype.pebble.webhook'
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+dependencies {
+    implementation project(':pebble-core')
+
+    compileOnly libs.javaxInject
+
+    implementation libs.coroutinesAndroid
+    implementation libs.kotlinxSerializationJson
+    implementation libs.timber
+
+    // Room for input queue persistence
+    implementation libs.room
+    implementation libs.roomKtx
+    ksp libs.annotations
+
+    // Ktor CIO embedded server
+    implementation libs.ktorServerCio
+    implementation libs.ktorServerCore
+    implementation libs.ktorServerContentNegotiation
+    implementation libs.ktorSerializationKotlinxJson
+
+    testImplementation libs.junit
+    testImplementation libs.kotlinTest
+    testImplementation libs.mockitoKotlin
+    testImplementation libs.coroutineTesting
+}

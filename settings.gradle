@@ -71,3 +71,11 @@ include ':feature-properties'
 include ':feature-vault'
 include ':feature-create-object'
 include ':feature-os-widgets'
+
+// region Pebble PKM Integration
+include ':pebble-core'
+include ':pebble-webhook'
+include ':pebble-assimilation'
+include ':pebble-changecontrol'
+include ':feature-pebble-ui'
+// endregion

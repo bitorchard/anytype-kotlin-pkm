@@ -5,6 +5,8 @@ import com.anytypeio.anytype.di.common.ComponentDependencies
 import com.anytypeio.anytype.di.common.ComponentDependenciesKey
 import com.anytypeio.anytype.di.feature.AllContentDependencies
 import com.anytypeio.anytype.di.feature.AppPreferencesDependencies
+import com.anytypeio.anytype.di.feature.pebble.PebbleDependencies
+import com.anytypeio.anytype.di.feature.pebble.PebbleModule
 import com.anytypeio.anytype.di.feature.BacklinkOrAddToObjectDependencies
 import com.anytypeio.anytype.di.feature.CreateBookmarkSubComponent
 import com.anytypeio.anytype.di.feature.CreateObjectFeatureDependencies
@@ -101,7 +103,10 @@ import javax.inject.Singleton
         NetworkModeModule::class,
         NotificationsModule::class,
         MembershipModule::class,
-        DispatcherModule::class
+        DispatcherModule::class,
+        // region Pebble PKM Integration
+        PebbleModule::class
+        // endregion
     ]
 )
 interface MainComponent :
@@ -163,7 +168,10 @@ interface MainComponent :
     CreateObjectFeatureDependencies,
     CreateObjectWidgetConfigDependencies,
     DataViewWidgetConfigDependencies,
-    ObjectShortcutWidgetConfigDependencies
+    ObjectShortcutWidgetConfigDependencies,
+    // region Pebble PKM Integration
+    PebbleDependencies
+    // endregion
 {
 
     fun inject(app: AndroidApplication)
@@ -485,4 +493,11 @@ abstract class ComponentDependenciesModule {
     @IntoMap
     @ComponentDependenciesKey(DataViewWidgetConfigDependencies::class)
     abstract fun provideDataViewWidgetConfigDependencies(component: MainComponent): ComponentDependencies
+
+    // region Pebble PKM Integration
+    @Binds
+    @IntoMap
+    @ComponentDependenciesKey(PebbleDependencies::class)
+    abstract fun providePebbleDependencies(component: MainComponent): ComponentDependencies
+    // endregion
 }

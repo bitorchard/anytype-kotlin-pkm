@@ -219,6 +219,14 @@ dependencies {
     implementation project(':feature-create-object')
     implementation project(':feature-os-widgets')
 
+    // region Pebble PKM Integration
+    implementation project(':pebble-core')
+    implementation project(':pebble-webhook')
+    implementation project(':pebble-assimilation')
+    implementation project(':pebble-changecontrol')
+    implementation project(':feature-pebble-ui')
+    // endregion
+
     //Compile time dependencies
     ksp libs.daggerCompiler
     compileOnly libs.javaxAnnotation

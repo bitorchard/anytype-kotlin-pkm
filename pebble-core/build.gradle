@@ -1,0 +1,31 @@
+plugins {
+    id "com.android.library"
+    id "kotlin-android"
+    alias(libs.plugins.kserialization)
+}
+
+android {
+    namespace 'com.anytypeio.anytype.pebble.core'
+
+    testOptions {
+        unitTests.returnDefaultValues = true
+    }
+}
+
+dependencies {
+    implementation project(':domain')
+    implementation project(':core-models')
+    implementation project(':core-utils')
+
+    compileOnly libs.javaxInject
+
+    implementation libs.coroutinesAndroid
+    implementation libs.kotlinxSerializationJson
+    implementation libs.timber
+
+    testImplementation libs.junit
+    testImplementation libs.kotlinTest
+    testImplementation libs.mockitoKotlin
+    testImplementation libs.coroutineTesting
+    testImplementation project(':test:utils')
+}
