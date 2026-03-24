@@ -10,7 +10,7 @@ import com.anytypeio.anytype.core_models.Id
 data class PebbleObject(
     val id: Id,
     val name: String,
-    /** The unique key of this object's type (e.g. "ot-task", "ot-pebble-event"). */
+    /** The unique key of this object's type (e.g. "ot-task", "ot-pkm-event"). */
     val typeKey: String,
     /** Full details map — raw relation key → value from the AnyType graph. */
     val details: Map<String, Any?>,

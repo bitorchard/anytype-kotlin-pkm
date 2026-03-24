@@ -21,6 +21,23 @@ This document is the detailed implementation plan for the Pebble Ring PKM assimi
 | Entity resolution | Multi-signal scoring (name 0.35, type 0.15, proximity 0.20, recency 0.15, frequency 0.10, attributes 0.05) | 04-data-assimilation |
 | Taxonomy representation | Kotlin sealed hierarchy (code-defined core) + AnyType runtime extension | 05-taxonomy |
 | Taxonomy evolution | Versioned, additive-only migrations applied on space open | 05-taxonomy |
+| Taxonomy type-key prefix | `ot-pkm-*` for custom types; `pkm-*` for custom relations | 05-taxonomy |
+| Taxonomy scope | 17 object types (5 built-in + 12 custom); 29 custom relations | 05-taxonomy |
+
+### Phase Progress
+
+| Phase | Status | Notes |
+|-------|--------|-------|
+| 0: Scaffolding & DI Bridge | ✅ Implemented | Build verification pending (needs `./gradlew assembleDebug` with network) |
+| 1: Taxonomy & Schema Bootstrap | ⬜ Not started | |
+| 2: Change Control Layer | ⬜ Not started | |
+| 3: Webhook Service | ⬜ Not started | |
+| 4: Assimilation Engine | ⬜ Not started | |
+| 5: UI Layer | ⬜ Not started | |
+| 6: Observability & Debug Tooling | ⬜ Not started | |
+| 7: Integration & E2E Testing | ⬜ Not started | |
+
+---
 
 ### Phase Progress
 
@@ -253,31 +270,85 @@ PkmRelation.kt      — Sealed class hierarchy for relations
 TaxonomyVersion.kt  — Version constants and migration definitions
 ```
 
-**`PkmObjectType` sealed hierarchy (10 types):**
+**`PkmObjectType` sealed hierarchy (17 types):**
 
-| Type | `uniqueKey` | `isBuiltIn` | Layout |
-|------|-------------|-------------|--------|
-| Person | `ot-human` | true | PROFILE |
-| Task | `ot-task` | true | TODO |
-| Note | `ot-note` | true | NOTE |
-| Project | `ot-project` | true | BASIC |
-| Bookmark | `ot-bookmark` | true | BOOKMARK |
-| Event | `ot-pebble-event` | false | BASIC |
-| Reminder | `ot-pebble-reminder` | false | TODO |
-| Place | `ot-pebble-place` | false | BASIC |
-| Organization | `ot-pebble-org` | false | BASIC |
-| Topic | `ot-pebble-topic` | false | BASIC |
+*Tier 1 — Reuse Built-in Types (`isBuiltIn = true`, no creation needed):*
+
+| Type | `uniqueKey` | Layout | Key Relations |
+|------|-------------|--------|---------------|
+| Person | `ot-human` | PROFILE | name, email, phone, organization, tags |
+| Task | `ot-task` | TODO | name, assignee, dueDate, done, priority, context |
+| Note | `ot-note` | NOTE | name, description, tags, source |
+| Project | `ot-project` | BASIC | name, description, status, dueDate, members |
+| Bookmark | `ot-bookmark` | BOOKMARK | name, source, description, tags |
+
+*Tier 2 — Custom Types (`isBuiltIn = false`, must create via `createObjectType`):*
+
+| Type | `uniqueKey` | Layout | Key Relations |
+|------|-------------|--------|---------------|
+| Event | `ot-pkm-event` | BASIC | name, pkm-date, pkm-endDate, pkm-location, pkm-attendees, description |
+| Reminder | `ot-pkm-reminder` | TODO | name, dueDate, pkm-relatedTo, done, pkm-context |
+| Place | `ot-pkm-place` | BASIC | name, description, pkm-relatedTo |
+| Organization | `ot-pkm-org` | BASIC | name, description, url, pkm-relatedTo |
+| Topic | `ot-pkm-topic` | BASIC | name, description, pkm-area, tag |
+| Meeting | `ot-pkm-meeting` | BASIC | name, pkm-date, pkm-attendees, description, pkm-relatedTo |
+| VoiceInput | `ot-pkm-voice-input` | NOTE | name, pkm-rawText, createdDate, status, pkm-changeSetId |
+| TimeEntry | `ot-pkm-time-entry` | BASIC | pkm-person, pkm-activity, pkm-date, pkm-duration, pkm-startDate, pkm-endDate, pkm-relatedTo, pkm-rawText |
+| Asset | `ot-pkm-asset` | BASIC | name, pkm-mileage, pkm-relatedTo, description |
+| MaintenanceRecord | `ot-pkm-maintenance-record` | BASIC | name, pkm-asset, pkm-date, pkm-mileage, pkm-cost, description, pkm-rawText |
+| Expense | `ot-pkm-expense` | BASIC | pkm-category, pkm-cost, pkm-merchant, pkm-date, pkm-relatedTo, pkm-rawText |
+| HealthMetric | `ot-pkm-health-metric` | BASIC | pkm-metric, pkm-value, pkm-unit, pkm-date, pkm-person, pkm-rawText |
+| MediaItem | `ot-pkm-media-item` | BASIC | name, pkm-mediaType, pkm-mediaStatus, pkm-rating, pkm-person, pkm-area, description |
+| Decision | `ot-pkm-decision` | NOTE | name, pkm-rationale, pkm-alternatives, pkm-date, pkm-relatedTo, pkm-rawText |
 
 Each type includes `requiredRelations` and `optionalRelations` lists referencing `PkmRelation` entries.
 
-**`PkmRelation` sealed hierarchy (10 custom + references to built-in):**
+**`PkmRelation` sealed hierarchy:**
 
-Custom relations use `pebble-` prefix. Built-in relations referenced by their existing key from `Relations.kt`.
+Built-in relations are referenced by their existing key from `Relations.kt` (no creation needed): `name`, `description`, `tag`, `status`, `assignee`, `dueDate`, `done`, `source`, `phone`, `email`, `url`, `priority`, `createdDate`.
+
+Custom relations use the `pkm-` prefix. All 29 must be created via `createRelation`:
+
+| # | Relation | Key | Format | Notes |
+|---|----------|-----|--------|-------|
+| 1 | Participates In | `pkm-participatesIn` | OBJECT | Links Person → Event/Meeting |
+| 2 | Located At | `pkm-locatedAt` | OBJECT | Links Event/Org → Place |
+| 3 | Belongs To | `pkm-belongsTo` | OBJECT | Links Person → Organization |
+| 4 | Attendees | `pkm-attendees` | OBJECT | Links Event/Meeting → Person(s) |
+| 5 | Related To | `pkm-relatedTo` | OBJECT | Generic cross-type link |
+| 6 | Context | `pkm-context` | TAG | GTD context (@home, @work, etc.) |
+| 7 | Area | `pkm-area` | OBJECT | PARA area of responsibility → Topic |
+| 8 | Start Date | `pkm-startDate` | DATE | Event/meeting start |
+| 9 | End Date | `pkm-endDate` | DATE | Event/meeting end |
+| 10 | Raw Text | `pkm-rawText` | LONG_TEXT | Original transcribed text |
+| 11 | Person | `pkm-person` | OBJECT | Who performed the activity (TimeEntry) |
+| 12 | Activity | `pkm-activity` | TAG | Activity type (@work, @exercise, etc.) |
+| 13 | Date | `pkm-date` | DATE | Actual activity date (vs. createdDate) |
+| 14 | Duration | `pkm-duration` | NUMBER | Duration in decimal hours |
+| 15 | List | `pkm-list` | OBJECT | Links Task/item → parent Collection |
+| 16 | Quantity | `pkm-quantity` | SHORT_TEXT | Item quantity with unit ("2 lbs") |
+| 17 | Asset | `pkm-asset` | OBJECT | Links MaintenanceRecord/Task → Asset |
+| 18 | Mileage | `pkm-mileage` | NUMBER | Odometer reading in km/miles |
+| 19 | Cost | `pkm-cost` | NUMBER | Monetary cost in local currency |
+| 20 | Category | `pkm-category` | TAG | Spending/activity category |
+| 21 | Merchant | `pkm-merchant` | SHORT_TEXT | Vendor or payee name |
+| 22 | Metric | `pkm-metric` | TAG | What was measured (weight, steps, etc.) |
+| 23 | Value | `pkm-value` | NUMBER | Numeric measurement |
+| 24 | Unit | `pkm-unit` | SHORT_TEXT | Unit of measurement (lbs, mmHg, etc.) |
+| 25 | Media Type | `pkm-mediaType` | TAG | book, movie, show, podcast, article |
+| 26 | Media Status | `pkm-mediaStatus` | STATUS | want / in-progress / completed / abandoned |
+| 27 | Rating | `pkm-rating` | NUMBER | User rating 1–5 |
+| 28 | Rationale | `pkm-rationale` | LONG_TEXT | Why a decision was made |
+| 29 | Alternatives | `pkm-alternatives` | LONG_TEXT | Options considered but not chosen |
+
+> **Note on `pkm-changeSetId`:** VoiceInput stores its associated ChangeSet ID as a `SHORT_TEXT` detail field using the key `pkm-changeSetId`. While not surfaced as a full relation in the taxonomy, this field still requires a custom relation definition (format `SHORT_TEXT`) so it can be queried via `SearchObjects`. Add it as a 30th relation in `PkmRelation` if querying VoiceInput by change set ID is needed; otherwise store it as an opaque string detail.
 
 **Acceptance criteria:**
-- [ ] `PkmObjectType.all()` returns 10 types
-- [ ] `PkmRelation.custom()` returns 10 custom relations
-- [ ] Each type's `requiredRelations` references valid relation entries
+- [ ] `PkmObjectType.all()` returns 17 types
+- [ ] `PkmObjectType.builtIn()` returns 5 types; `PkmObjectType.custom()` returns 12 types
+- [ ] `PkmRelation.custom()` returns 29 custom relations
+- [ ] Each type's `requiredRelations` references valid `PkmRelation` entries
+- [ ] No custom type uses a `pebble-` prefix (all custom keys use `ot-pkm-*` / `pkm-*`)
 - [ ] Unit test: sealed hierarchy covers all expected types/relations
 
 ### Task 1.2: Implement Taxonomy Prompt Generator
@@ -294,10 +365,11 @@ Create the function that serializes the taxonomy into an LLM system prompt.
 - Inserts the current date for temporal reference.
 
 **Acceptance criteria:**
-- [ ] `generateTaxonomyPrompt()` returns a string containing all 10 types and their fields
+- [ ] `generateTaxonomyPrompt()` returns a string containing all 17 types and their fields
+- [ ] Prompt includes all 29 custom relations with source and target type annotations
 - [ ] Output is human-readable and LLM-parseable
 - [ ] Unit test: prompt contains expected type names and relation names
-- [ ] Unit test: adding a new type to the hierarchy automatically includes it in the prompt
+- [ ] Unit test: adding a new type to the hierarchy automatically includes it in the prompt without any other code change
 
 ### Task 1.3: Implement Taxonomy Provider
 
@@ -340,8 +412,9 @@ pebble-core/.../taxonomy/MigrationRunner.kt       — Applies pending migrations
 - Each step calls the appropriate facade method (create type, create relation, add relation to type).
 
 **Acceptance criteria:**
-- [ ] Bootstrap creates all 5 custom types and 10 custom relations in a test space
+- [ ] Bootstrap creates all 12 custom types and 29 custom relations in a test space
 - [ ] Bootstrap is idempotent — running twice doesn't create duplicates
+- [ ] All custom type keys use the `ot-pkm-*` prefix; all custom relation keys use the `pkm-*` prefix
 - [ ] Migration from version N to N+1 applies only the delta
 - [ ] Integration test: bootstrap → verify types exist via search → re-bootstrap → verify no duplicates
 
@@ -350,8 +423,10 @@ pebble-core/.../taxonomy/MigrationRunner.kt       — Applies pending migrations
 Write a comprehensive test that bootstraps the taxonomy and verifies all types and relations are correctly created.
 
 **Acceptance criteria:**
-- [ ] Test creates custom types and relations via mocked `PebbleGraphService`
-- [ ] Test verifies correct `uniqueKey`, `layout`, and `format` for each
+- [ ] Test creates all 12 custom types and 29 custom relations via mocked `PebbleGraphService`
+- [ ] Test verifies correct `uniqueKey`, `layout`, and `format` for each entry
+- [ ] Test verifies no built-in type is submitted to `createObjectType` (only custom types)
+- [ ] Test verifies all custom keys use `ot-pkm-*` / `pkm-*` prefix — no `ot-pebble-*` or `pebble-*` keys
 - [ ] `make test_debug_all` passes
 
 ---
@@ -376,9 +451,19 @@ ExecutionResult.kt     — ExecutionResult, OperationResult
 ```
 
 Follow the data model from `03-research-change-control.md`:
-- `ChangeSet` with status state machine (PENDING → APPROVED → APPLYING → APPLIED, etc.)
+- `ChangeSet` with status state machine (PENDING → APPROVED → APPLYING → APPLIED, etc.) and a `traceId: String` field that links to the originating `RawInput.traceId` for end-to-end observability (see Phase 6).
 - `ChangeOperation` with ordinal, type, params, inverse, beforeState, afterState, status
 - `OperationParams` as sealed class hierarchy (CreateObjectParams, DeleteObjectParams, SetDetailsParams, AddRelationParams, RemoveRelationParams)
+
+**AnyType storage type keys** (used when storing ChangeSet/ChangeOperation/VoiceInput as AnyType objects):
+
+| Internal Type | AnyType `uniqueKey` | Notes |
+|---------------|---------------------|-------|
+| ChangeSet | `ot-pkm-changeset` | Status, inputId, summary, traceId, createdAt |
+| ChangeOperation | `ot-pkm-changeoperation` | ordinal, type, params (JSON), inverse (JSON), beforeState, afterState |
+| VoiceInput | `ot-pkm-voice-input` | Matches taxonomy — rawText, processedDate, status, changeSetId |
+
+> **Prefix rule:** All internal Pebble type keys use `ot-pkm-*`. The older `ot-pebble-*` prefix from early research drafts is **not used**.
 
 **Acceptance criteria:**
 - [ ] All data classes compile and are serializable (kotlinx.serialization)
@@ -417,7 +502,7 @@ interface ChangeStore {
 **Room cache** provides fast local queries without middleware roundtrips. `CompositeChangeStore` writes to both AnyType (primary/synced) and Room (fast read cache).
 
 **Acceptance criteria:**
-- [ ] `AnytypeChangeStore` creates ChangeSet as AnyType objects with correct type key and relations
+- [ ] `AnytypeChangeStore` creates ChangeSet as AnyType objects with type key `ot-pkm-changeset`
 - [ ] `LocalChangeCache` stores/retrieves ChangeSet summaries in Room
 - [ ] `CompositeChangeStore` writes to both and reads from Room cache (falling back to AnyType)
 - [ ] Unit tests for each store implementation
@@ -1291,17 +1376,21 @@ Write integration tests for key scenarios:
 
 | # | Scenario | Expected Result |
 |---|----------|----------------|
-| 1 | "Aarav has a basketball game on Friday" | Creates Person(Aarav), Event(basketball game, date=Friday), links them |
+| 1 | "Aarav has a basketball game on Friday" | Creates Person(Aarav), Event(basketball game, pkm-date=Friday), links via pkm-attendees |
 | 2 | Same input again | Resolves existing Aarav (no duplicate), creates new Event, links |
-| 3 | "Remind me to call Dr. Patel" | Creates Reminder, resolves existing Person(Dr. Patel) |
-| 4 | "Meeting with Sarah at Cafe Luce tomorrow at 3pm" | Creates Meeting, resolves/creates Person(Sarah), resolves/creates Place(Cafe Luce) |
-| 5 | Rollback scenario 1 | Event deleted, Person deleted (or kept if linked elsewhere), relation removed |
-| 6 | Conflict rollback: apply → user edits Person name → rollback | Conflict detected on Person, skip or force |
-| 7 | Offline: webhook received while offline | Input queued, processed when online |
-| 8 | Taxonomy bootstrap on fresh space | All custom types and relations created |
+| 3 | "Remind me to call Dr. Patel" | Creates Reminder (ot-pkm-reminder), resolves existing Person(Dr. Patel), sets dueDate |
+| 4 | "Meeting with Sarah at Cafe Luce tomorrow at 3pm" | Creates Meeting (ot-pkm-meeting), resolves/creates Person(Sarah), resolves/creates Place (ot-pkm-place, Cafe Luce) |
+| 5 | "I spent $45 on groceries at Safeway" | Creates Expense (ot-pkm-expense, pkm-category=groceries, pkm-cost=45, pkm-merchant=Safeway) |
+| 6 | "Ran 5 km, took 35 minutes" | Creates TimeEntry (ot-pkm-time-entry, pkm-activity=exercise, pkm-duration=0.583, pkm-rawText=original) |
+| 7 | "Oil change on the Highlander at 72000 miles, $89 at Jiffy Lube" | Creates MaintenanceRecord (ot-pkm-maintenance-record), resolves/creates Asset (ot-pkm-asset, Highlander), sets pkm-mileage, pkm-cost, pkm-merchant |
+| 8 | Rollback scenario 1 | Event deleted, Person deleted (or kept if linked elsewhere), relation removed |
+| 9 | Conflict rollback: apply → user edits Person name → rollback | Conflict detected on Person, skip or force |
+| 10 | Offline: webhook received while offline | Input queued, processed when online |
+| 11 | Taxonomy bootstrap on fresh space | All 12 custom types (ot-pkm-*) and 29 custom relations (pkm-*) created; no duplicates on re-run |
+| 12 | `PkmObjectType.all()` sealed hierarchy returns 17 types; `PkmRelation.custom()` returns 29 relations | Unit test — no network or AnyType instance needed |
 
 **Acceptance criteria:**
-- [ ] All 8 scenarios pass
+- [ ] All 12 scenarios pass
 - [ ] Tests are repeatable (clean up after each)
 - [ ] `make test_debug_all` passes
 
@@ -1385,4 +1474,4 @@ For a coding agent executing iteratively:
 7. **Phase 6** (Tasks 6.1 → 6.4) — observability; mark complete once instrumentation + debug UI are verified end-to-end
 8. **Phase 7** (Tasks 7.1 → 7.4) — integration and polish; use the debug screen to diagnose E2E test failures
 
-Total estimated tasks: **44 tasks across 8 phases.**
+Total estimated tasks: **44 tasks across 8 phases** (taxonomy expanded to 17 types / 29 relations; no new phases added).

@@ -17,11 +17,11 @@ object PebbleConstants {
     /** Default port the embedded Ktor webhook server listens on. */
     const val DEFAULT_WEBHOOK_PORT = 8391
 
-    /** Prefix reserved for Pebble-owned custom types and relations. */
-    const val PEBBLE_TYPE_KEY_PREFIX = "ot-pebble-"
+    /** Prefix reserved for PKM custom object types (e.g. "ot-pkm-event"). */
+    const val PEBBLE_TYPE_KEY_PREFIX = "ot-pkm-"
 
-    /** Prefix reserved for Pebble-owned custom relations. */
-    const val PEBBLE_RELATION_KEY_PREFIX = "pebble-"
+    /** Prefix reserved for PKM custom relations (e.g. "pkm-relatedTo"). */
+    const val PEBBLE_RELATION_KEY_PREFIX = "pkm-"
 
     /** Maximum time (ms) to wait for an LLM extraction response. */
     const val DEFAULT_LLM_TIMEOUT_MS = 10_000L
