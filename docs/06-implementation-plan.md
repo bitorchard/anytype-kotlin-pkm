@@ -22,29 +22,14 @@ This document is the detailed implementation plan for the Pebble Ring PKM assimi
 | Taxonomy representation | Kotlin sealed hierarchy (code-defined core) + AnyType runtime extension | 05-taxonomy |
 | Taxonomy evolution | Versioned, additive-only migrations applied on space open | 05-taxonomy |
 | Taxonomy type-key prefix | `ot-pkm-*` for custom types; `pkm-*` for custom relations | 05-taxonomy |
-| Taxonomy scope | 17 object types (5 built-in + 12 custom); 29 custom relations | 05-taxonomy |
+| Taxonomy scope | 19 object types (5 built-in + 14 custom); 30 custom relations (includes pkm-changeSetId) | 05-taxonomy |
 
 ### Phase Progress
 
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 0: Scaffolding & DI Bridge | ✅ Implemented | Build verification pending (needs `./gradlew assembleDebug` with network) |
-| 1: Taxonomy & Schema Bootstrap | ⬜ Not started | |
-| 2: Change Control Layer | ⬜ Not started | |
-| 3: Webhook Service | ⬜ Not started | |
-| 4: Assimilation Engine | ⬜ Not started | |
-| 5: UI Layer | ⬜ Not started | |
-| 6: Observability & Debug Tooling | ⬜ Not started | |
-| 7: Integration & E2E Testing | ⬜ Not started | |
-
----
-
-### Phase Progress
-
-| Phase | Status | Notes |
-|-------|--------|-------|
-| 0: Scaffolding & DI Bridge | ✅ Implemented | Build verification pending (needs `./gradlew assembleDebug` with network) |
-| 1: Taxonomy & Schema Bootstrap | ⬜ Not started | |
+| 1: Taxonomy & Schema Bootstrap | ✅ Implemented | 19 types (5 built-in + 14 custom), 30 custom relations; unit tests written |
 | 2: Change Control Layer | ⬜ Not started | |
 | 3: Webhook Service | ⬜ Not started | |
 | 4: Assimilation Engine | ⬜ Not started | |
