@@ -30,8 +30,8 @@ This document is the detailed implementation plan for the Pebble Ring PKM assimi
 |-------|--------|-------|
 | 0: Scaffolding & DI Bridge | ✅ Implemented | Build verification pending (needs `./gradlew assembleDebug` with network) |
 | 1: Taxonomy & Schema Bootstrap | ✅ Implemented | 19 types (5 built-in + 14 custom), 30 custom relations; unit tests written |
-| 2: Change Control Layer | ⬜ Not started | |
-| 3: Webhook Service | ⬜ Not started | |
+| 2: Change Control Layer | ✅ Implemented | ChangeSet model, CompositeChangeStore (AnyType+Room), OperationOrderer (topo sort), ChangeExecutor, ChangeRollback; unit tests for all components |
+| 3: Webhook Service | ✅ Implemented | RawInput model, PersistentInputQueue (Room), Ktor CIO server (routes + auth), WebhookForegroundService, InputProcessor + AssimilationPipeline interface |
 | 4: Assimilation Engine | ⬜ Not started | |
 | 5: UI Layer | ⬜ Not started | |
 | 6: Observability & Debug Tooling | ⬜ Not started | |

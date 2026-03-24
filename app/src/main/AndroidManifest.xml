@@ -10,6 +10,10 @@
         android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- region Pebble PKM Integration -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- endregion -->
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission
@@ -198,6 +202,10 @@
                 <action android:name="com.google.firebase.MESSAGING_EVENT" />
             </intent-filter>
         </service>
+
+        <!-- region Pebble PKM Integration -->
+        <service android:name="com.anytypeio.anytype.pebble.webhook.service.WebhookForegroundService" android:foregroundServiceType="dataSync" android:exported="false" />
+        <!-- endregion -->
 
     </application>
 
