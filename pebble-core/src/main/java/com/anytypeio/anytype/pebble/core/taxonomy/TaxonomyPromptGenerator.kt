@@ -68,24 +68,24 @@ object TaxonomyPromptGenerator {
 {
   "entities": [
     {
-      "tempId": "e1",
-      "typeKey": "<object type uniqueKey>",
+      "local_ref": "entity-1",
+      "type_key": "<object type uniqueKey>",
       "name": "<display name>",
       "attributes": {
-        "<relationKey>": "<value>"
+        "<relation_key>": "<value>"
       },
-      "confidence": 0.9,
-      "sourceText": "<span of original text>"
+      "confidence": 0.9
     }
   ],
   "relationships": [
     {
-      "relationKey": "<pkm-* relation key>",
-      "fromTempId": "e1",
-      "toTempId": "e2",
+      "from_local_ref": "entity-1",
+      "to_local_ref": "entity-2",
+      "relation_key": "<pkm-* relation key>",
       "confidence": 0.85
     }
-  ]
+  ],
+  "overall_confidence": 0.9
 }""".trimIndent())
     }
 

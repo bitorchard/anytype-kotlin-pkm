@@ -32,7 +32,7 @@ This document is the detailed implementation plan for the Pebble Ring PKM assimi
 | 1: Taxonomy & Schema Bootstrap | ✅ Implemented | 19 types (5 built-in + 14 custom), 30 custom relations; unit tests written |
 | 2: Change Control Layer | ✅ Implemented | ChangeSet model, CompositeChangeStore (AnyType+Room), OperationOrderer (topo sort), ChangeExecutor, ChangeRollback; unit tests for all components |
 | 3: Webhook Service | ✅ Implemented | RawInput model, PersistentInputQueue (Room), Ktor CIO server (routes + auth), WebhookForegroundService, InputProcessor + AssimilationPipeline interface |
-| 4: Assimilation Engine | ⬜ Not started | |
+| 4: Assimilation Engine | ✅ Implemented | ExtractionResult model, LLM clients (Anthropic + OpenAI), EntityExtractor, EntityResolver, ScoringEngine (6-signal), NameSimilarity, EntityCache, ContextWindow, PlanGenerator, AssimilationEngine, ResolutionFeedbackStore (Room); unit tests for all components |
 | 5: UI Layer | ⬜ Not started | |
 | 6: Observability & Debug Tooling | ⬜ Not started | |
 | 7: Integration & E2E Testing | ⬜ Not started | |
@@ -745,7 +745,7 @@ interface AssimilationPipeline {
 
 ---
 
-## Phase 4: Assimilation Engine
+## Phase 4: Assimilation Engine ✅ IMPLEMENTED
 
 **Goal:** Implement the LLM-based extraction, entity resolution, and plan generation pipeline.
 
@@ -765,8 +765,8 @@ DisambiguationChoice.kt  — Disambiguation UI model
 ```
 
 **Acceptance criteria:**
-- [ ] All models compile and are serializable
-- [ ] `AssimilationPlan` contains a list of `ChangeOperation` (from Phase 2 model)
+- [x] All models compile and are serializable
+- [x] `AssimilationPlan` contains a list of `ChangeOperation` (from Phase 2 model)
 
 ### Task 4.2: Implement LLM Client
 
@@ -800,9 +800,9 @@ Each implementation:
 **API key storage:** Android Keystore via `EncryptedSharedPreferences`.
 
 **Acceptance criteria:**
-- [ ] `AnthropicLlmClient` sends correctly formatted request and parses response
-- [ ] `OpenAiLlmClient` same
-- [ ] Error handling: timeout, rate limit, invalid response
+- [x] `AnthropicLlmClient` sends correctly formatted request and parses response
+- [x] `OpenAiLlmClient` same
+- [x] Error handling: timeout, rate limit, invalid response
 - [ ] Unit tests with mock HTTP responses
 - [ ] API key stored securely, not in plaintext
 
@@ -820,10 +820,10 @@ Each implementation:
 6. Return validated `ExtractionResult`.
 
 **Acceptance criteria:**
-- [ ] Given "Aarav has a basketball game on Friday" → extracts Person(Aarav) + Event(basketball game, date=Friday)
-- [ ] Unknown type falls back to Note
-- [ ] Low-confidence extractions are flagged
-- [ ] Unit test with mocked LLM client
+- [x] Given "Aarav has a basketball game on Friday" → extracts Person(Aarav) + Event(basketball game, date=Friday)
+- [x] Unknown type falls back to Note
+- [x] Low-confidence extractions are flagged
+- [x] Unit test with mocked LLM client
 
 ### Task 4.4: Implement Entity Resolver
 
@@ -860,12 +860,12 @@ pebble-assimilation/.../resolution/EntityCache.kt        — Hot cache via subsc
 - Provides fast candidate retrieval without per-query search latency.
 
 **Acceptance criteria:**
-- [ ] Exact name match with correct type scores ≥ 0.85
-- [ ] Fuzzy name match ("Arav" → "Aarav") scores in disambiguation range
-- [ ] No candidates → create new decision
-- [ ] Multiple high-scoring candidates → force disambiguation
-- [ ] Scoring weights are configurable
-- [ ] Unit tests for each signal independently
+- [x] Exact name match with correct type scores ≥ 0.85
+- [x] Fuzzy name match ("Arav" → "Aarav") scores in disambiguation range
+- [x] No candidates → create new decision
+- [x] Multiple high-scoring candidates → force disambiguation
+- [x] Scoring weights are configurable
+- [x] Unit tests for each signal independently
 - [ ] Integration test for full resolution flow
 
 ### Task 4.5: Implement Context Window
@@ -880,9 +880,9 @@ pebble-assimilation/.../resolution/EntityCache.kt        — Hot cache via subsc
 - Injected into `EntityResolver` for boosting recent entities.
 
 **Acceptance criteria:**
-- [ ] Sequential inputs share entity context
+- [x] Sequential inputs share entity context
 - [ ] "Aarav" in input 2 resolves to the Person created in input 1
-- [ ] Buffer wraps correctly at capacity
+- [x] Buffer wraps correctly at capacity
 
 ### Task 4.6: Implement Plan Generator
 
@@ -899,9 +899,9 @@ pebble-assimilation/.../resolution/EntityCache.kt        — Hot cache via subsc
 
 **Acceptance criteria:**
 - [ ] "Aarav has a basketball game on Friday" → ChangeSet with ~5 operations (create Person, set Person details, create Event, set Event details, link them)
-- [ ] Existing entity resolution → SetDetails/AddRelation on existing object (no Create)
-- [ ] Operations are correctly ordered (creates before details/relations)
-- [ ] Unit test with known inputs
+- [x] Existing entity resolution → SetDetails/AddRelation on existing object (no Create)
+- [x] Operations are correctly ordered (creates before details/relations)
+- [x] Unit test with known inputs
 
 ### Task 4.7: Implement AssimilationPipeline (Orchestrator)
 
@@ -918,11 +918,11 @@ pebble-assimilation/.../resolution/EntityCache.kt        — Hot cache via subsc
 Implements the `AssimilationPipeline` interface from `pebble-core`.
 
 **Acceptance criteria:**
-- [ ] End-to-end: text input → ChangeSet with correct operations
-- [ ] Handles LLM failures gracefully (returns error result)
-- [ ] Handles entity resolution failures gracefully
+- [x] End-to-end: text input → ChangeSet with correct operations
+- [x] Handles LLM failures gracefully (returns error result)
+- [x] Handles entity resolution failures gracefully
 - [ ] Latency < 10 seconds for simple inputs (with real LLM)
-- [ ] Unit test with mocked LLM and search
+- [x] Unit test with mocked LLM and search
 
 ### Task 4.8: Resolution Feedback Store
 
@@ -936,8 +936,8 @@ Implements the `AssimilationPipeline` interface from `pebble-core`.
 - Stored in Room (lightweight, local-only).
 
 **Acceptance criteria:**
-- [ ] Past resolutions boost future scoring for same name → object pairs
-- [ ] Unit test: resolve "Aarav" → object X three times → frequency boost increases
+- [x] Past resolutions boost future scoring for same name → object pairs
+- [x] Unit test: resolve "Aarav" → object X three times → frequency boost increases
 
 ---
 
