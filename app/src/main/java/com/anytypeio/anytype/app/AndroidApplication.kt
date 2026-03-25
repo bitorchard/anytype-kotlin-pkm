@@ -33,11 +33,16 @@ import com.anytypeio.anytype.di.main.DaggerMainComponent
 import com.anytypeio.anytype.di.main.MainComponent
 import com.anytypeio.anytype.middleware.discovery.MDNSProvider
 import com.anytypeio.anytype.middleware.discovery.adresshandler.LocalNetworkAddressProvider
+import com.anytypeio.anytype.pebble.webhook.model.WebhookConfig
+import com.anytypeio.anytype.pebble.webhook.pipeline.InputProcessor
+import com.anytypeio.anytype.pebble.webhook.server.WebhookServer
+import com.anytypeio.anytype.pebble.webhook.service.WebhookServerProvider
 import javax.inject.Inject
 import kotlin.time.ExperimentalTime
 import timber.log.Timber
 
-class AndroidApplication : Application(), HasComponentDependencies, SingletonImageLoader.Factory {
+class AndroidApplication : Application(), HasComponentDependencies, SingletonImageLoader.Factory,
+    WebhookServerProvider {
 
     @Inject
     lateinit var amplitudeTracker: AmplitudeTracker
@@ -68,6 +73,16 @@ class AndroidApplication : Application(), HasComponentDependencies, SingletonIma
         ComponentManager(main, this)
     }
 
+    // ── WebhookServerProvider ────────────────────────────────────────────────
+
+    override fun webhookServer(): WebhookServer =
+        componentManager.pebbleComponent.get().webhookServer()
+
+    override fun webhookConfig(): WebhookConfig =
+        componentManager.pebbleComponent.get().webhookConfig()
+
+    override fun inputProcessor(): InputProcessor =
+        componentManager.pebbleComponent.get().inputProcessor()
 
     override fun onCreate() {
         if (BuildConfig.ENABLE_STRICT_MODE) {

@@ -41,6 +41,8 @@ private const val ANTHROPIC_VERSION = "2023-06-01"
  */
 class AnthropicLlmClient(private val config: LlmClientConfig) : LlmClient {
 
+    override val modelName: String get() = config.model
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true

@@ -161,6 +161,11 @@ class WidgetsScreenFragment : Fragment(),
                                 },
                                 onManageSectionsClicked = {
                                     vm.onManageSectionsClicked()
+                                },
+                                onPebbleClicked = {
+                                    runCatching {
+                                        findNavController().navigate(R.id.pebbleHome)
+                                    }.onFailure { Timber.e(it, "Failed to navigate to Pebble dashboard") }
                                 }
                             )
                         }

@@ -1,5 +1,6 @@
 package com.anytypeio.anytype.pebble.webhook.server
 
+import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
 import com.anytypeio.anytype.pebble.webhook.model.WebhookConfig
 import com.anytypeio.anytype.pebble.webhook.queue.InputQueue
 import io.ktor.serialization.kotlinx.json.json
@@ -20,7 +21,8 @@ import javax.inject.Inject
  * Thread-safe start/stop is enforced via [synchronized].
  */
 class WebhookServer @Inject constructor(
-    private val queue: InputQueue
+    private val queue: InputQueue,
+    private val eventStore: PipelineEventStore? = null
 ) {
     private var server: EmbeddedServer<*, *>? = null
     private var currentConfig: WebhookConfig? = null
@@ -45,7 +47,7 @@ class WebhookServer @Inject constructor(
                 })
             }
             routing {
-                webhookRoutes(queue, config)
+                webhookRoutes(queue, config, eventStore)
             }
         }.also {
             it.start(wait = false)

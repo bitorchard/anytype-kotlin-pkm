@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/nav_pebble"
+    app:startDestination="@id/pebbleHome">
+
+    <fragment
+        android:id="@+id/pebbleHome"
+        android:name="com.anytypeio.anytype.ui.pebble.PebbleDashboardFragment"
+        android:label="PebbleDashboard">
+        <action
+            android:id="@+id/action_pebbleHome_to_inputHistory"
+            app:destination="@id/inputHistory" />
+        <action
+            android:id="@+id/action_pebbleHome_to_approvalScreen"
+            app:destination="@id/approvalScreen" />
+        <action
+            android:id="@+id/action_pebbleHome_to_changeLog"
+            app:destination="@id/changeLog" />
+        <action
+            android:id="@+id/action_pebbleHome_to_pebbleSettings"
+            app:destination="@id/pebbleSettings" />
+        <action
+            android:id="@+id/action_pebbleHome_to_pebbleDebug"
+            app:destination="@id/pebbleDebug" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/inputHistory"
+        android:name="com.anytypeio.anytype.ui.pebble.InputHistoryFragment"
+        android:label="InputHistory">
+        <action
+            android:id="@+id/action_inputHistory_to_changeSetDetail"
+            app:destination="@id/changeSetDetail" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/approvalScreen"
+        android:name="com.anytypeio.anytype.ui.pebble.ApprovalFragment"
+        android:label="ApprovalScreen" />
+
+    <fragment
+        android:id="@+id/changeLog"
+        android:name="com.anytypeio.anytype.ui.pebble.ChangeLogFragment"
+        android:label="ChangeLog">
+        <action
+            android:id="@+id/action_changeLog_to_changeSetDetail"
+            app:destination="@id/changeSetDetail" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/changeSetDetail"
+        android:name="com.anytypeio.anytype.ui.pebble.ChangeSetDetailFragment"
+        android:label="ChangeSetDetail">
+        <argument
+            android:name="changeSetId"
+            app:argType="string" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/pebbleSettings"
+        android:name="com.anytypeio.anytype.ui.pebble.PebbleSettingsFragment"
+        android:label="PebbleSettings">
+        <action
+            android:id="@+id/action_pebbleSettings_to_webhookQr"
+            app:destination="@id/webhookQr" />
+        <action
+            android:id="@+id/action_pebbleSettings_to_pebbleDebug"
+            app:destination="@id/pebbleDebug" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/webhookQr"
+        android:name="com.anytypeio.anytype.ui.pebble.WebhookQrFragment"
+        android:label="WebhookQr">
+        <action
+            android:id="@+id/action_webhookQr_to_pebbleDebug"
+            app:destination="@id/pebbleDebug" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/pebbleDebug"
+        android:name="com.anytypeio.anytype.ui.pebble.PebbleDebugFragment"
+        android:label="PebbleDebug">
+        <argument
+            android:name="traceId"
+            app:argType="string"
+            android:defaultValue="" />
+    </fragment>
+
+</navigation>

@@ -10,6 +10,9 @@ import com.anytypeio.anytype.pebble.assimilation.model.ExtractionResult
  */
 interface LlmClient {
 
+    /** Human-readable model identifier used in observability metadata (e.g. "claude-sonnet-4-5"). */
+    val modelName: String
+
     /**
      * Extract entities and relationships from [userInput].
      *

@@ -38,7 +38,8 @@ fun HomeScreenMenu(
     onMuteClicked: () -> Unit,
     onQrCodeClicked: () -> Unit,
     onCopyInviteLinkClicked: () -> Unit,
-    onManageSectionsClicked: () -> Unit
+    onManageSectionsClicked: () -> Unit,
+    onPebbleClicked: () -> Unit = {}
 ) {
     val isSharedSpace = spaceAccessType == SpaceAccessType.SHARED
     val isOneToOne = spaceUxType == SpaceUxType.ONE_TO_ONE
@@ -157,6 +158,21 @@ fun HomeScreenMenu(
             },
             onClick = {
                 onManageSectionsClicked()
+                onDismiss()
+            }
+        )
+
+        // Pebble PKM integration entry point
+        Divider(paddingStart = 0.dp, paddingEnd = 0.dp, height = 8.dp)
+        DropdownMenuItem(
+            text = {
+                MenuItemContent(
+                    icon = CoreR.drawable.ic_notifications,
+                    text = "Pebble"
+                )
+            },
+            onClick = {
+                onPebbleClicked()
                 onDismiss()
             }
         )

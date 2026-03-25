@@ -29,8 +29,18 @@ data class RawVoiceInput(
 )
 
 sealed class AssimilationResult {
-    /** Assimilation succeeded; a change set was produced. */
+    /** Assimilation succeeded; a change set was produced and is pending user approval. */
     data class Success(val changeSetId: String, val traceId: String) : AssimilationResult()
+
+    /**
+     * Assimilation succeeded and the change set was automatically applied because
+     * the overall confidence exceeded the configured auto-approve threshold.
+     */
+    data class AutoApplied(
+        val changeSetId: String,
+        val traceId: String,
+        val summary: String
+    ) : AssimilationResult()
 
     /** Assimilation failed; the input should be retried or moved to dead-letter. */
     data class Failure(val error: String, val retryable: Boolean = true) : AssimilationResult()

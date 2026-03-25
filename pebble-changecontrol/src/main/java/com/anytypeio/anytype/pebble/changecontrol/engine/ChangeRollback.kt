@@ -13,6 +13,10 @@ import com.anytypeio.anytype.pebble.changecontrol.model.RollbackOperationResult
 import com.anytypeio.anytype.pebble.changecontrol.model.RollbackResult
 import com.anytypeio.anytype.pebble.changecontrol.store.ChangeStore
 import com.anytypeio.anytype.pebble.core.PebbleGraphService
+import com.anytypeio.anytype.pebble.core.observability.EventStatus
+import com.anytypeio.anytype.pebble.core.observability.PipelineEvent
+import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
+import com.anytypeio.anytype.pebble.core.observability.PipelineStage
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -32,7 +36,8 @@ import javax.inject.Inject
  */
 class ChangeRollback @Inject constructor(
     private val graphService: PebbleGraphService,
-    private val changeStore: ChangeStore
+    private val changeStore: ChangeStore,
+    private val eventStore: PipelineEventStore? = null
 ) {
 
     suspend fun rollback(
@@ -95,10 +100,34 @@ class ChangeRollback @Inject constructor(
         return if (conflicts.isEmpty()) {
             changeStore.updateStatus(changeSet.id, ChangeSetStatus.ROLLED_BACK)
             Timber.i("[Pebble] ChangeRollback: clean rollback of ${changeSet.id}")
+            eventStore?.record(
+                PipelineEvent(
+                    traceId = changeSet.traceId,
+                    stage = PipelineStage.ROLLED_BACK,
+                    status = EventStatus.SUCCESS,
+                    message = "Rollback complete",
+                    metadata = mapOf(
+                        "operationsRolledBack" to results.count { it.rolledBack }.toString(),
+                        "conflictsSkipped" to "0"
+                    )
+                )
+            )
             RollbackResult.FullRollback(changeSet.id, results)
         } else {
             changeStore.updateStatus(changeSet.id, ChangeSetStatus.PARTIALLY_ROLLED_BACK)
             Timber.w("[Pebble] ChangeRollback: partial rollback of ${changeSet.id}; ${conflicts.size} conflict(s)")
+            eventStore?.record(
+                PipelineEvent(
+                    traceId = changeSet.traceId,
+                    stage = PipelineStage.ROLLED_BACK,
+                    status = EventStatus.SUCCESS,
+                    message = "Partial rollback",
+                    metadata = mapOf(
+                        "operationsRolledBack" to results.count { it.rolledBack }.toString(),
+                        "conflictsSkipped" to conflicts.size.toString()
+                    )
+                )
+            )
             RollbackResult.PartialRollback(changeSet.id, results, conflicts)
         }
     }

@@ -38,6 +38,8 @@ private const val OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
  */
 class OpenAiLlmClient(private val config: LlmClientConfig) : LlmClient {
 
+    override val modelName: String get() = config.model
+
     private val json = Json {
         ignoreUnknownKeys = true
         isLenient = true

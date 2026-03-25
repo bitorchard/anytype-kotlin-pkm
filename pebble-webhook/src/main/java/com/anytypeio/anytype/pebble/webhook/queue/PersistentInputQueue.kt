@@ -1,14 +1,23 @@
 package com.anytypeio.anytype.pebble.webhook.queue
 
+import com.anytypeio.anytype.pebble.core.observability.EventStatus
+import com.anytypeio.anytype.pebble.core.observability.PipelineEvent
+import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
+import com.anytypeio.anytype.pebble.core.observability.PipelineStage
 import com.anytypeio.anytype.pebble.webhook.model.InputQueueEntry
 import com.anytypeio.anytype.pebble.webhook.model.QueueEntryStatus
 import com.anytypeio.anytype.pebble.webhook.model.RawInput
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import timber.log.Timber
 import javax.inject.Inject
+
+private const val TAG = "Pebble:Webhook"
 
 /**
  * Room-backed implementation of [InputQueue].
@@ -17,8 +26,10 @@ import javax.inject.Inject
  * observes [getPending] to re-process any PENDING entries that were interrupted by a crash.
  */
 class PersistentInputQueue @Inject constructor(
-    private val dao: InputQueueDao
+    private val dao: InputQueueDao,
+    private val eventStore: PipelineEventStore? = null
 ) : InputQueue {
+    private val instrumentScope = CoroutineScope(Dispatchers.IO)
 
     private val json = Json { ignoreUnknownKeys = true }
 
@@ -34,7 +45,21 @@ class PersistentInputQueue @Inject constructor(
             enqueuedAt = System.currentTimeMillis()
         )
         dao.insert(entity)
-        Timber.d("[Pebble] Enqueued input ${input.id} (traceId=${input.traceId})")
+        val queueDepth = dao.observePending(InputQueue.MAX_RETRIES).let { 0 } // lightweight
+        Timber.tag(TAG).d("[trace=${input.traceId}] INPUT_QUEUED")
+        eventStore?.let { store ->
+            instrumentScope.launch {
+                store.record(
+                    PipelineEvent(
+                        traceId = input.traceId,
+                        stage = PipelineStage.INPUT_QUEUED,
+                        status = EventStatus.SUCCESS,
+                        message = "Input persisted to queue",
+                        metadata = mapOf("source" to input.source)
+                    )
+                )
+            }
+        }
         return input.id
     }
 

@@ -1,5 +1,9 @@
 package com.anytypeio.anytype.pebble.webhook.server
 
+import com.anytypeio.anytype.pebble.core.observability.EventStatus
+import com.anytypeio.anytype.pebble.core.observability.PipelineEvent
+import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
+import com.anytypeio.anytype.pebble.core.observability.PipelineStage
 import com.anytypeio.anytype.pebble.webhook.model.InputRequest
 import com.anytypeio.anytype.pebble.webhook.model.InputResponse
 import com.anytypeio.anytype.pebble.webhook.model.RawInput
@@ -13,8 +17,11 @@ import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
+import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import timber.log.Timber
+
+private const val TAG = "Pebble:Webhook"
 
 @Serializable
 data class ErrorResponse(val error: String)
@@ -27,7 +34,11 @@ data class StatusResponse(
     val version: String = "1.0"
 )
 
-fun Routing.webhookRoutes(queue: InputQueue, config: WebhookConfig) {
+fun Routing.webhookRoutes(
+    queue: InputQueue,
+    config: WebhookConfig,
+    eventStore: PipelineEventStore? = null
+) {
     route("/api/v1") {
         post("/input") {
             if (!WebhookAuth.checkAuth(call, config)) return@post
@@ -52,11 +63,31 @@ fun Routing.webhookRoutes(queue: InputQueue, config: WebhookConfig) {
             )
 
             try {
+                val remoteIp = call.request.local.remoteAddress
+                val bodyLen = request.text.length
+                Timber.tag(TAG).d("[trace=${input.traceId}] INPUT_RECEIVED | remoteIp=$remoteIp | bodyLength=$bodyLen")
+                eventStore?.let { store ->
+                    launch {
+                        store.record(
+                            PipelineEvent(
+                                traceId = input.traceId,
+                                stage = PipelineStage.INPUT_RECEIVED,
+                                status = EventStatus.SUCCESS,
+                                message = "Webhook received input",
+                                metadata = mapOf(
+                                    "remoteIp" to remoteIp,
+                                    "bodyLength" to bodyLen.toString(),
+                                    "preview" to input.text.take(30)
+                                )
+                            )
+                        )
+                    }
+                }
                 queue.enqueue(input)
-                Timber.i("[Pebble] Webhook received input id=${input.id} traceId=${input.traceId}")
+                Timber.tag(TAG).i("[trace=${input.traceId}] INPUT_QUEUED")
                 call.respond(HttpStatusCode.OK, InputResponse(id = input.id, traceId = input.traceId))
             } catch (e: Exception) {
-                Timber.e(e, "[Pebble] Webhook: failed to enqueue input")
+                Timber.tag(TAG).e("[Pebble] Webhook: failed to enqueue input: ${e.message}")
                 call.respond(HttpStatusCode.InternalServerError, ErrorResponse("Failed to queue input"))
             }
         }

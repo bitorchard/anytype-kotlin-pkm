@@ -4,6 +4,10 @@ import com.anytypeio.anytype.pebble.assimilation.context.ContextWindow
 import com.anytypeio.anytype.pebble.assimilation.llm.LlmClient
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractionResult
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractedEntity
+import com.anytypeio.anytype.pebble.core.observability.EventStatus
+import com.anytypeio.anytype.pebble.core.observability.PipelineEvent
+import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
+import com.anytypeio.anytype.pebble.core.observability.PipelineStage
 import com.anytypeio.anytype.pebble.core.taxonomy.PkmObjectType
 import com.anytypeio.anytype.pebble.core.taxonomy.TaxonomyPromptGenerator
 import timber.log.Timber
@@ -25,7 +29,8 @@ private const val TAG = "Pebble:Assimilation"
  */
 class EntityExtractor @Inject constructor(
     private val llmClient: LlmClient,
-    private val contextWindow: ContextWindow
+    private val contextWindow: ContextWindow,
+    private val eventStore: PipelineEventStore? = null
 ) {
     /** Entities with confidence below this threshold are flagged (but not discarded). */
     private val lowConfidenceThreshold = 0.60f
@@ -34,25 +39,80 @@ class EntityExtractor @Inject constructor(
      * Extract entities from [inputText].
      *
      * @param inputText Raw voice-input text.
+     * @param traceId Propagation token for observability.
      * @param currentDate Injected for testability; defaults to now.
      * @throws [com.anytypeio.anytype.pebble.assimilation.llm.LlmException] on API failure.
      */
-    suspend fun extract(inputText: String, currentDate: Date = Date()): ExtractionResult {
+    suspend fun extract(
+        inputText: String,
+        traceId: String = "",
+        currentDate: Date = Date()
+    ): ExtractionResult {
         val systemPrompt = buildSystemPrompt(currentDate)
-        Timber.tag(TAG).d("[EntityExtractor] extracting from input (${inputText.length} chars)")
+        val startMs = System.currentTimeMillis()
+        Timber.tag(TAG).d("[trace=$traceId] LLM_EXTRACTING | chars=${inputText.length}")
+        eventStore?.record(
+            PipelineEvent(
+                traceId = traceId,
+                stage = PipelineStage.LLM_EXTRACTING,
+                status = EventStatus.IN_PROGRESS,
+                message = "LLM extraction started",
+                metadata = mapOf("model" to llmClient.modelName)
+            )
+        )
 
-        val raw = llmClient.extractEntities(systemPrompt, inputText)
+        val raw = try {
+            llmClient.extractEntities(systemPrompt, inputText)
+        } catch (e: Exception) {
+            val durationMs = System.currentTimeMillis() - startMs
+            val meta = mapOf(
+                "errorClass" to e::class.simpleName.orEmpty(),
+                "errorMessage" to (e.message?.take(200) ?: ""),
+                "httpStatus" to extractHttpStatus(e)
+            )
+            Timber.tag(TAG).e("[trace=$traceId] ERROR at LLM_EXTRACTING | ${e.message}")
+            eventStore?.record(
+                PipelineEvent(
+                    traceId = traceId,
+                    stage = PipelineStage.ERROR,
+                    status = EventStatus.FAILURE,
+                    message = "LLM extraction failed: ${e.message?.take(100)}",
+                    metadata = meta,
+                    durationMs = durationMs
+                )
+            )
+            throw e
+        }
 
         val validated = validateAndNormalize(raw)
+        val durationMs = System.currentTimeMillis() - startMs
         Timber.tag(TAG).d(
-            "[EntityExtractor] extracted ${validated.entities.size} entities, " +
-                "${validated.relationships.size} relationships; " +
-                "confidence=${validated.overallConfidence}"
+            "[trace=$traceId] LLM_EXTRACTED | entities=${validated.entities.size} " +
+                "relationships=${validated.relationships.size} confidence=${validated.overallConfidence} " +
+                "durationMs=$durationMs"
+        )
+        eventStore?.record(
+            PipelineEvent(
+                traceId = traceId,
+                stage = PipelineStage.LLM_EXTRACTED,
+                status = EventStatus.SUCCESS,
+                message = "LLM extraction complete",
+                metadata = mapOf(
+                    "entityCount" to validated.entities.size.toString(),
+                    "model" to llmClient.modelName
+                ),
+                durationMs = durationMs
+            )
         )
 
         flagLowConfidence(validated)
         return validated
     }
+
+    private fun extractHttpStatus(e: Exception): String =
+        e.message?.let { msg ->
+            Regex("\\b(4\\d{2}|5\\d{2})\\b").find(msg)?.value ?: ""
+        } ?: ""
 
     // ── Prompt building ─────────────────────────────────────────────────────
 

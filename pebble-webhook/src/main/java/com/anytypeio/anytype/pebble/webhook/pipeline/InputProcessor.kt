@@ -3,6 +3,7 @@ package com.anytypeio.anytype.pebble.webhook.pipeline
 import com.anytypeio.anytype.core_models.primitives.SpaceId
 import com.anytypeio.anytype.pebble.core.AssimilationPipeline
 import com.anytypeio.anytype.pebble.core.AssimilationResult
+import com.anytypeio.anytype.pebble.core.PipelineNotifier
 import com.anytypeio.anytype.pebble.core.RawVoiceInput
 import com.anytypeio.anytype.pebble.webhook.model.InputQueueEntry
 import com.anytypeio.anytype.pebble.webhook.queue.InputQueue
@@ -20,10 +21,13 @@ import javax.inject.Inject
  * - Call [start] once the assimilation pipeline is ready (typically from the foreground service).
  * - Call [stop] on service shutdown.
  * - Respects offline state via [AssimilationResult.Offline] — entries remain in the queue.
+ *
+ * Optional [notifier] fires Android notifications for approval pending and auto-applied events.
  */
 class InputProcessor @Inject constructor(
     private val queue: InputQueue,
-    private val pipeline: AssimilationPipeline
+    private val pipeline: AssimilationPipeline,
+    private val notifier: PipelineNotifier? = null
 ) {
     private var job: Job? = null
 
@@ -59,6 +63,19 @@ class InputProcessor @Inject constructor(
             is AssimilationResult.Success -> {
                 queue.markProcessed(entry.id, resultChangeSetId = result.changeSetId)
                 Timber.i("[Pebble] InputProcessor: input ${entry.id} → changeSet ${result.changeSetId}")
+                notifier?.notifyApprovalPending(
+                    changeSetId = result.changeSetId,
+                    summary = "Voice input processed — tap to review"
+                )
+            }
+            is AssimilationResult.AutoApplied -> {
+                queue.markProcessed(entry.id, resultChangeSetId = result.changeSetId)
+                Timber.i("[Pebble] InputProcessor: input ${entry.id} → auto-applied ${result.changeSetId}")
+                notifier?.notifyAutoApplied(
+                    changeSetId = result.changeSetId,
+                    summary = result.summary,
+                    inputPreview = entry.input.text.take(60)
+                )
             }
             is AssimilationResult.Failure -> {
                 if (result.retryable) {
@@ -67,6 +84,7 @@ class InputProcessor @Inject constructor(
                 } else {
                     queue.markFailed(entry.id, "permanent: ${result.error}")
                     Timber.e("[Pebble] InputProcessor: input ${entry.id} failed permanently: ${result.error}")
+                    notifier?.notifyError(result.error, errorType = "PIPELINE_FAILURE")
                 }
             }
             AssimilationResult.Offline -> {

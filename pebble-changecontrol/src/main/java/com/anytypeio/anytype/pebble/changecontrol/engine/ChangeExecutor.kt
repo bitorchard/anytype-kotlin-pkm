@@ -12,6 +12,10 @@ import com.anytypeio.anytype.pebble.changecontrol.model.OperationStatus
 import com.anytypeio.anytype.pebble.changecontrol.store.ChangeStore
 import com.anytypeio.anytype.pebble.core.PebbleGraphService
 import com.anytypeio.anytype.pebble.core.PebbleId
+import com.anytypeio.anytype.pebble.core.observability.EventStatus
+import com.anytypeio.anytype.pebble.core.observability.PipelineEvent
+import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
+import com.anytypeio.anytype.pebble.core.observability.PipelineStage
 import timber.log.Timber
 import javax.inject.Inject
 
@@ -30,11 +34,22 @@ import javax.inject.Inject
  */
 class ChangeExecutor @Inject constructor(
     private val graphService: PebbleGraphService,
-    private val changeStore: ChangeStore
+    private val changeStore: ChangeStore,
+    private val eventStore: PipelineEventStore? = null
 ) {
 
     suspend fun execute(changeSet: ChangeSet): ExecutionResult {
+        val startMs = System.currentTimeMillis()
         changeStore.updateStatus(changeSet.id, ChangeSetStatus.APPLYING)
+        eventStore?.record(
+            PipelineEvent(
+                traceId = changeSet.traceId,
+                stage = PipelineStage.CHANGE_APPLYING,
+                status = EventStatus.IN_PROGRESS,
+                message = "Applying ${changeSet.operations.size} operations",
+                metadata = mapOf("operationCount" to changeSet.operations.size.toString())
+            )
+        )
 
         val ordered = OperationOrderer.executionOrder(changeSet.operations)
         val results = mutableListOf<OperationResult>()
@@ -58,10 +73,23 @@ class ChangeExecutor @Inject constructor(
                     // Operation failed
                     markRemainingPending(ordered, results, results.size, changeSet.id)
                     changeStore.updateStatus(changeSet.id, ChangeSetStatus.APPLY_FAILED)
+                    val err = result.error ?: "Unknown error"
+                    eventStore?.record(
+                        PipelineEvent(
+                            traceId = changeSet.traceId,
+                            stage = PipelineStage.ERROR,
+                            status = EventStatus.FAILURE,
+                            message = "Operation failed at ordinal ${resolvedOp.ordinal}: $err",
+                            metadata = mapOf(
+                                "failedOperationIndex" to resolvedOp.ordinal.toString(),
+                                "errorClass" to "OperationFailed"
+                            )
+                        )
+                    )
                     return ExecutionResult.PartialFailure(
                         changeSetId = changeSet.id,
                         firstFailedOrdinal = resolvedOp.ordinal,
-                        error = IllegalStateException(result.error ?: "Unknown error"),
+                        error = IllegalStateException(err),
                         operationResults = results
                     )
                 }
@@ -82,6 +110,19 @@ class ChangeExecutor @Inject constructor(
                 results.add(failedResult)
                 markRemainingPending(ordered, results, results.size, changeSet.id)
                 changeStore.updateStatus(changeSet.id, ChangeSetStatus.APPLY_FAILED)
+                eventStore?.record(
+                    PipelineEvent(
+                        traceId = changeSet.traceId,
+                        stage = PipelineStage.ERROR,
+                        status = EventStatus.FAILURE,
+                        message = "Operation exception at ordinal ${op.ordinal}: ${e.message?.take(100)}",
+                        metadata = mapOf(
+                            "failedOperationIndex" to op.ordinal.toString(),
+                            "errorClass" to e::class.simpleName.orEmpty(),
+                            "errorMessage" to (e.message?.take(200) ?: "")
+                        )
+                    )
+                )
                 return ExecutionResult.PartialFailure(
                     changeSetId = changeSet.id,
                     firstFailedOrdinal = op.ordinal,
@@ -92,7 +133,18 @@ class ChangeExecutor @Inject constructor(
         }
 
         changeStore.updateStatus(changeSet.id, ChangeSetStatus.APPLIED)
-        Timber.i("[Pebble] ChangeExecutor: change set ${changeSet.id} applied successfully (${results.size} ops)")
+        val durationMs = System.currentTimeMillis() - startMs
+        Timber.i("[Pebble] ChangeExecutor: change set ${changeSet.id} applied successfully (${results.size} ops) durationMs=$durationMs")
+        eventStore?.record(
+            PipelineEvent(
+                traceId = changeSet.traceId,
+                stage = PipelineStage.CHANGE_APPLIED,
+                status = EventStatus.SUCCESS,
+                message = "All ${results.size} operations applied",
+                metadata = mapOf("durationMs" to durationMs.toString()),
+                durationMs = durationMs
+            )
+        )
         return ExecutionResult.Success(changeSet.id, results)
     }
 

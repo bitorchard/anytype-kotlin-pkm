@@ -713,4 +713,6 @@
         android:name="com.anytypeio.anytype.ui.publishtoweb.MySitesFragment"
         android:label="MySitesScreen"/>
 
+    <include app:graph="@navigation/nav_pebble" />
+
 </navigation>
