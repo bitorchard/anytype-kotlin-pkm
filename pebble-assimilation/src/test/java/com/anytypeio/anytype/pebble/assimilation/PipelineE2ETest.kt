@@ -2,7 +2,6 @@ package com.anytypeio.anytype.pebble.assimilation
 
 import com.anytypeio.anytype.core_models.primitives.SpaceId
 import com.anytypeio.anytype.pebble.assimilation.context.ContextWindow
-import com.anytypeio.anytype.pebble.assimilation.extraction.EntityExtractor
 import com.anytypeio.anytype.pebble.assimilation.model.AssimilationPlan
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractedEntity
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractionResult
@@ -14,6 +13,7 @@ import com.anytypeio.anytype.pebble.assimilation.model.SignalBreakdown
 import com.anytypeio.anytype.pebble.core.PebbleObject
 import com.anytypeio.anytype.pebble.assimilation.plan.PlanGenerator
 import com.anytypeio.anytype.pebble.assimilation.resolution.EntityResolver
+import com.anytypeio.anytype.pebble.assimilation.llm.LlmException
 import com.anytypeio.anytype.pebble.changecontrol.engine.ChangeExecutor
 import com.anytypeio.anytype.pebble.changecontrol.model.ExecutionResult
 import com.anytypeio.anytype.pebble.changecontrol.model.ChangeOperation
@@ -43,19 +43,15 @@ import org.mockito.kotlin.whenever
 /**
  * End-to-end pipeline integration tests.
  *
- * Validates the complete flow from [AssimilationEngine.process] through all stages:
- * 1. LLM entity extraction
- * 2. Entity resolution
- * 3. Plan generation
- * 4. ChangeSet persistence
- * 5. Observability event recording
- *
- * The LLM client, AnyType backend, and Room database are mocked to allow offline execution.
+ * Uses [FakeEntityExtractionService] and [FakeEntityResolutionService] to avoid
+ * the Mockito `@JvmInline` value-class / coroutine matcher incompatibility.
+ * [PlanGenerator], [ChangeStore], [ChangeExecutor], and [PipelineEventStore] remain
+ * as Mockito mocks because they don't take inline class parameters.
  */
 class PipelineE2ETest {
 
-    private val entityExtractor: EntityExtractor = mock()
-    private val entityResolver: EntityResolver = mock()
+    private val entityExtractor = FakeEntityExtractionService()
+    private val entityResolver = FakeEntityResolutionService()
     private val planGenerator: PlanGenerator = mock()
     private val changeStore: ChangeStore = mock()
     private val contextWindow: ContextWindow = ContextWindow()
@@ -66,13 +62,16 @@ class PipelineE2ETest {
     private val voiceInput = RawVoiceInput(
         id = "input-e2e-001",
         traceId = "trace-e2e-001",
-        text = "Aarav has a basketball game on Friday at 5pm"
+        text = "Aarav has a basketball game on Friday at 5pm",
+        receivedAt = 0L
     )
 
     private lateinit var engine: AssimilationEngine
 
     @Before
     fun setup() {
+        entityExtractor.calls.clear()
+        entityResolver.resolveCallCount = 0
         engine = AssimilationEngine(
             entityExtractor = entityExtractor,
             entityResolver = entityResolver,
@@ -116,8 +115,8 @@ class PipelineE2ETest {
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.92f)
         val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.92f))
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(stubbedResolution(entities))
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenAnswer { inv -> (inv.getArgument<ChangeSet>(0)).id }
 
@@ -133,8 +132,8 @@ class PipelineE2ETest {
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.85f)
         val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.85f))
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(stubbedResolution(entities))
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenAnswer { inv -> (inv.getArgument<ChangeSet>(0)).id }
 
@@ -163,8 +162,8 @@ class PipelineE2ETest {
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.95f)
         val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.95f))
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(stubbedResolution(entities))
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenAnswer { inv -> (inv.getArgument<ChangeSet>(0)).id }
         whenever(changeExecutor.execute(any<ChangeSet>())).thenReturn(
@@ -187,8 +186,8 @@ class PipelineE2ETest {
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.65f)
         val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.65f))
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(stubbedResolution(entities))
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenAnswer { inv -> (inv.getArgument<ChangeSet>(0)).id }
 
@@ -227,8 +226,8 @@ class PipelineE2ETest {
             metadata = metadata(0.92f)
         )
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(resolutionResult)
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(resolutionResult)
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenAnswer { inv -> (inv.getArgument<ChangeSet>(0)).id }
 
@@ -241,8 +240,7 @@ class PipelineE2ETest {
 
     @Test
     fun `LLM offline returns AssimilationResult Offline`() = runTest {
-        whenever(entityExtractor.extract(any(), any()))
-            .thenThrow(com.anytypeio.anytype.pebble.assimilation.llm.LlmException.NetworkException("timeout"))
+        entityExtractor.enqueueError(LlmException.NetworkException("timeout"))
 
         val result = engine.process(voiceInput, space)
 
@@ -251,8 +249,7 @@ class PipelineE2ETest {
 
     @Test
     fun `LLM rate limit returns retryable Failure`() = runTest {
-        whenever(entityExtractor.extract(any(), any()))
-            .thenThrow(com.anytypeio.anytype.pebble.assimilation.llm.LlmException.RateLimitException("429"))
+        entityExtractor.enqueueError(LlmException.RateLimitException("429"))
 
         val result = engine.process(voiceInput, space)
 
@@ -262,8 +259,7 @@ class PipelineE2ETest {
 
     @Test
     fun `empty extraction result returns non-retryable Failure`() = runTest {
-        val emptyExtraction = ExtractionResult(emptyList(), emptyList())
-        whenever(entityExtractor.extract(any(), any())).thenReturn(emptyExtraction)
+        entityExtractor.enqueue(ExtractionResult(emptyList(), emptyList()))
 
         val result = engine.process(voiceInput, space)
 
@@ -277,8 +273,8 @@ class PipelineE2ETest {
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.90f)
         val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.90f))
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(stubbedResolution(entities))
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenThrow(RuntimeException("DB unavailable"))
 
@@ -296,8 +292,8 @@ class PipelineE2ETest {
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.88f)
         val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.88f))
 
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(stubbedResolution(entities))
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenAnswer { inv -> (inv.getArgument<ChangeSet>(0)).id }
 

@@ -37,7 +37,7 @@ class ScoringEngineTest {
     ): PebbleObject {
         val details = mutableMapOf<String, Any?>("name" to name)
         if (lastModifiedMs != null) details["lastModifiedDate"] = lastModifiedMs
-        return PebbleObject(id = id, typeKey = typeKey, details = details)
+        return PebbleObject(id = id, name = name, typeKey = typeKey, details = details)
     }
 
     @Test

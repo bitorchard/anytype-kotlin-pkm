@@ -31,7 +31,7 @@ class EntityExtractor @Inject constructor(
     private val llmClient: LlmClient,
     private val contextWindow: ContextWindow,
     private val eventStore: PipelineEventStore? = null
-) {
+) : EntityExtractionService {
     /** Entities with confidence below this threshold are flagged (but not discarded). */
     private val lowConfidenceThreshold = 0.60f
 
@@ -43,10 +43,10 @@ class EntityExtractor @Inject constructor(
      * @param currentDate Injected for testability; defaults to now.
      * @throws [com.anytypeio.anytype.pebble.assimilation.llm.LlmException] on API failure.
      */
-    suspend fun extract(
+    override suspend fun extract(
         inputText: String,
-        traceId: String = "",
-        currentDate: Date = Date()
+        traceId: String,
+        currentDate: Date
     ): ExtractionResult {
         val systemPrompt = buildSystemPrompt(currentDate)
         val startMs = System.currentTimeMillis()

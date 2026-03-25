@@ -1,9 +1,10 @@
 package com.anytypeio.anytype.pebble.assimilation
 
 import com.anytypeio.anytype.pebble.assimilation.context.ContextWindow
-import com.anytypeio.anytype.pebble.assimilation.extraction.EntityExtractor
+import com.anytypeio.anytype.pebble.assimilation.extraction.EntityExtractionService
 import com.anytypeio.anytype.pebble.assimilation.llm.LlmException
 import com.anytypeio.anytype.pebble.assimilation.plan.PlanGenerator
+import com.anytypeio.anytype.pebble.assimilation.resolution.EntityResolutionService
 import com.anytypeio.anytype.pebble.assimilation.resolution.EntityResolver
 import com.anytypeio.anytype.pebble.changecontrol.engine.ChangeExecutor
 import com.anytypeio.anytype.pebble.changecontrol.model.ChangeSet
@@ -42,8 +43,8 @@ private const val TAG = "Pebble:Assimilation"
  */
 @Singleton
 class AssimilationEngine @Inject constructor(
-    private val entityExtractor: EntityExtractor,
-    private val entityResolver: EntityResolver,
+    private val entityExtractor: EntityExtractionService,
+    private val entityResolver: EntityResolutionService,
     private val planGenerator: PlanGenerator,
     private val changeStore: ChangeStore,
     private val contextWindow: ContextWindow,

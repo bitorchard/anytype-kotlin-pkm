@@ -1,6 +1,8 @@
 package com.anytypeio.anytype.pebble.changecontrol.engine
 
 import com.anytypeio.anytype.core_models.primitives.SpaceId
+import com.anytypeio.anytype.core_models.primitives.TypeKey
+import com.anytypeio.anytype.pebble.changecontrol.FakePebbleGraphService
 import com.anytypeio.anytype.pebble.changecontrol.model.ChangeOperation
 import com.anytypeio.anytype.pebble.changecontrol.model.ChangeSet
 import com.anytypeio.anytype.pebble.changecontrol.model.ChangeSetMetadata
@@ -10,7 +12,6 @@ import com.anytypeio.anytype.pebble.changecontrol.model.OperationParams
 import com.anytypeio.anytype.pebble.changecontrol.model.OperationStatus
 import com.anytypeio.anytype.pebble.changecontrol.model.OperationType
 import com.anytypeio.anytype.pebble.changecontrol.store.ChangeStore
-import com.anytypeio.anytype.pebble.core.PebbleGraphService
 import com.anytypeio.anytype.pebble.core.PebbleObject
 import com.anytypeio.anytype.pebble.core.PebbleObjectResult
 import kotlinx.coroutines.test.runTest
@@ -20,24 +21,35 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
-import org.mockito.kotlin.whenever
 
+/**
+ * Uses a hand-written [FakePebbleGraphService] instead of a Mockito mock to avoid
+ * the Mockito/coroutine/inline-value-class incompatibility that prevents
+ * `createObject(SpaceId, TypeKey, ...)` stubs from matching reliably.
+ */
 class ChangeExecutorTest {
 
-    private val graphService: PebbleGraphService = mock()
+    private val graphService = FakePebbleGraphService()
     private val changeStore: ChangeStore = mock()
     private val executor = ChangeExecutor(graphService, changeStore)
 
     private val spaceId = "test-space"
+    private val testSpace = SpaceId(spaceId)
+    private val testTypeKey = TypeKey("ot-pkm-event")
 
     @Before
     fun setup() {
-        // Default: getObject returns null (no before state to capture)
+        graphService.createObjectResults.clear()
+        graphService.createObjectCalls.clear()
+        graphService.getObjectResults.clear()
+        graphService.updateObjectDetailsCalls.clear()
+        graphService.deleteObjectsCalls.clear()
     }
 
     private fun buildChangeSet(vararg ops: ChangeOperation) = ChangeSet(
@@ -87,9 +99,8 @@ class ChangeExecutorTest {
         val link = linkOp("op-3", 2, "local-event", "local-person")
         val changeSet = buildChangeSet(createPerson, createEvent, link)
 
-        whenever(graphService.createObject(any(), any(), any()))
-            .thenReturn(PebbleObjectResult("person-id-real"))
-            .thenReturn(PebbleObjectResult("event-id-real"))
+        graphService.enqueueCreateObject(PebbleObjectResult("person-id-real"))
+        graphService.enqueueCreateObject(PebbleObjectResult("event-id-real"))
 
         val result = executor.execute(changeSet)
 
@@ -105,8 +116,7 @@ class ChangeExecutorTest {
         val createOp = createOp("op-1", 0, "local-1")
         val changeSet = buildChangeSet(createOp)
 
-        whenever(graphService.createObject(any(), any(), any()))
-            .thenReturn(PebbleObjectResult("real-id-abc"))
+        graphService.enqueueCreateObject(PebbleObjectResult("real-id-abc"))
 
         val result = executor.execute(changeSet) as ExecutionResult.Success
 
@@ -120,9 +130,8 @@ class ChangeExecutorTest {
         val op3 = createOp("op-3", 2, "local-3")
         val changeSet = buildChangeSet(op1, op2, op3)
 
-        whenever(graphService.createObject(any(), any(), any()))
-            .thenReturn(PebbleObjectResult("id-1"))
-            .thenThrow(RuntimeException("Middleware error"))
+        graphService.enqueueCreateObject(PebbleObjectResult("id-1"))
+        graphService.enqueueCreateObjectError(RuntimeException("Middleware error"))
 
         val result = executor.execute(changeSet)
 
@@ -148,16 +157,14 @@ class ChangeExecutorTest {
         )
         val changeSet = buildChangeSet(createOp, setDetails)
 
-        whenever(graphService.createObject(any(), any(), any()))
-            .thenReturn(PebbleObjectResult("event-real-id"))
-        whenever(graphService.getObject(any(), eq("event-real-id"), any()))
-            .thenReturn(PebbleObject("event-real-id", "Event", "ot-pkm-event", emptyMap(), null))
+        graphService.enqueueCreateObject(PebbleObjectResult("event-real-id"))
+        graphService.getObjectResults["event-real-id"] =
+            PebbleObject("event-real-id", "Event", "ot-pkm-event", emptyMap(), null)
 
         executor.execute(changeSet)
 
-        val captor = argumentCaptor<String>()
-        verify(graphService).updateObjectDetails(captor.capture(), any())
-        assertEquals("event-real-id", captor.firstValue)
+        assertEquals(1, graphService.updateObjectDetailsCalls.size)
+        assertEquals("event-real-id", graphService.updateObjectDetailsCalls.first().first)
     }
 
     @Test
@@ -172,8 +179,8 @@ class ChangeExecutorTest {
         )
         val changeSet = buildChangeSet(setDetails)
 
-        whenever(graphService.getObject(any(), eq("obj-existing"), any()))
-            .thenReturn(PebbleObject("obj-existing", "Old Name", "ot-task", mapOf("name" to "Old Name"), null))
+        graphService.getObjectResults["obj-existing"] =
+            PebbleObject("obj-existing", "Old Name", "ot-task", mapOf("name" to "Old Name"), null)
 
         executor.execute(changeSet)
 
@@ -182,8 +189,8 @@ class ChangeExecutorTest {
             status = eq(OperationStatus.APPLIED),
             beforeState = eq(mapOf("name" to "Old Name")),
             afterState = eq(mapOf("name" to "New Name")),
-            resultObjectId = any(),
-            inverse = any()
+            resultObjectId = anyOrNull(),
+            inverse = anyOrNull()
         )
     }
 }

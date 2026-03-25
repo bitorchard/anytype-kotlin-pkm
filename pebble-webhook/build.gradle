@@ -15,12 +15,15 @@ android {
 
 dependencies {
     implementation project(':pebble-core')
+    implementation project(':core-models')
 
     compileOnly libs.javaxInject
 
     implementation libs.coroutinesAndroid
     implementation libs.kotlinxSerializationJson
     implementation libs.timber
+    implementation libs.appcompat
+    implementation libs.androidxCore
 
     // Room for input queue persistence
     implementation libs.room

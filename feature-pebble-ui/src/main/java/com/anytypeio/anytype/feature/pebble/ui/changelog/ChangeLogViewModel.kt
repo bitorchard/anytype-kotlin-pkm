@@ -42,7 +42,7 @@ class ChangeLogViewModel @Inject constructor(
     fun rollback(changeSetId: String) {
         viewModelScope.launch {
             val cs = changeStore.getChangeSet(changeSetId) ?: return@launch
-            val result = changeRollback.rollback(cs, conflictResolution = ConflictResolution.SKIP)
+            val result = changeRollback.rollback(cs, resolution = ConflictResolution.SKIP)
             val msg = when (result) {
                 is RollbackResult.FullRollback -> "Rolled back successfully"
                 is RollbackResult.PartialRollback ->

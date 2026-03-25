@@ -30,7 +30,7 @@ private const val FORCE_DISAMBIGUATION_SCORE = 0.70f
 class EntityResolver @Inject constructor(
     private val scoringEngine: ScoringEngine,
     private val entityCache: EntityCache
-) {
+) : EntityResolutionService {
 
     data class ResolutionResult(
         val resolved: List<ResolvedEntity>,
@@ -44,7 +44,7 @@ class EntityResolver @Inject constructor(
      * Auto-resolvable entities are immediately decided; ambiguous ones are returned
      * in [ResolutionResult.pendingDisambiguation] for UI presentation.
      */
-    suspend fun resolve(
+    override suspend fun resolve(
         extractionResult: ExtractionResult,
         space: PebbleSpaceId
     ): ResolutionResult {

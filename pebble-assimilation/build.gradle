@@ -16,6 +16,7 @@ android {
 dependencies {
     implementation project(':pebble-core')
     implementation project(':pebble-changecontrol')
+    implementation project(':core-models')
 
     compileOnly libs.javaxInject
 

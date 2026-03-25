@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.kserialization)
 }
 
+
 android {
     buildFeatures {
         compose true
@@ -29,6 +30,7 @@ dependencies {
     compileOnly libs.javaxInject
 
     implementation libs.coroutinesAndroid
+    implementation libs.kotlinxSerializationJson
     implementation libs.timber
 
     implementation libs.lifecycleViewModel
@@ -50,5 +52,6 @@ dependencies {
 
     testImplementation libs.junit
     testImplementation libs.kotlinTest
+    testImplementation libs.mockitoKotlin
     testImplementation libs.coroutineTesting
 }

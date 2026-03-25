@@ -118,18 +118,20 @@ private fun OperationDetailRow(op: ChangeOperation) {
             }
             Text(label, style = MaterialTheme.typography.labelSmall, color = color)
         }
-        if (op.beforeState != null || op.afterState != null) {
+        val beforeState = op.beforeState
+        val afterState = op.afterState
+        if (beforeState != null || afterState != null) {
             Spacer(Modifier.height(4.dp))
-            if (op.beforeState != null) {
+            if (beforeState != null) {
                 Text(
-                    "Before: ${op.beforeState.entries.take(3).joinToString { "${it.key}=${it.value}" }}",
+                    "Before: ${beforeState.entries.take(3).joinToString { "${it.key}=${it.value}" }}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            if (op.afterState != null) {
+            if (afterState != null) {
                 Text(
-                    "After: ${op.afterState.entries.take(3).joinToString { "${it.key}=${it.value}" }}",
+                    "After: ${afterState.entries.take(3).joinToString { "${it.key}=${it.value}" }}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

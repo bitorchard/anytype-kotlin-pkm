@@ -17,7 +17,6 @@ import io.ktor.server.routing.Routing
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
 import io.ktor.server.routing.route
-import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
 import timber.log.Timber
 
@@ -66,23 +65,19 @@ fun Routing.webhookRoutes(
                 val remoteIp = call.request.local.remoteAddress
                 val bodyLen = request.text.length
                 Timber.tag(TAG).d("[trace=${input.traceId}] INPUT_RECEIVED | remoteIp=$remoteIp | bodyLength=$bodyLen")
-                eventStore?.let { store ->
-                    launch {
-                        store.record(
-                            PipelineEvent(
-                                traceId = input.traceId,
-                                stage = PipelineStage.INPUT_RECEIVED,
-                                status = EventStatus.SUCCESS,
-                                message = "Webhook received input",
-                                metadata = mapOf(
-                                    "remoteIp" to remoteIp,
-                                    "bodyLength" to bodyLen.toString(),
-                                    "preview" to input.text.take(30)
-                                )
-                            )
+                eventStore?.record(
+                    PipelineEvent(
+                        traceId = input.traceId,
+                        stage = PipelineStage.INPUT_RECEIVED,
+                        status = EventStatus.SUCCESS,
+                        message = "Webhook received input",
+                        metadata = mapOf(
+                            "remoteIp" to remoteIp,
+                            "bodyLength" to bodyLen.toString(),
+                            "preview" to input.text.take(30)
                         )
-                    }
-                }
+                    )
+                )
                 queue.enqueue(input)
                 Timber.tag(TAG).i("[trace=${input.traceId}] INPUT_QUEUED")
                 call.respond(HttpStatusCode.OK, InputResponse(id = input.id, traceId = input.traceId))

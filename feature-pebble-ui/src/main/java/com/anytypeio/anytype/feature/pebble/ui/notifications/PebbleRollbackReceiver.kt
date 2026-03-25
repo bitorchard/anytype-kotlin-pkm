@@ -34,7 +34,7 @@ class PebbleRollbackReceiver : BroadcastReceiver() {
                 Timber.w("[Pebble] PebbleRollbackReceiver: change set $changeSetId not found")
                 return@launch
             }
-            val result = changeRollback.rollback(cs, conflictResolution = ConflictResolution.SKIP)
+            val result = changeRollback.rollback(cs, resolution = ConflictResolution.SKIP)
             Timber.i("[Pebble] PebbleRollbackReceiver: rollback result=${result::class.simpleName}")
             errorNotification.cancel(PebbleErrorType.AUTO_APPLIED)
         }

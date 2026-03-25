@@ -10,16 +10,16 @@ import kotlin.math.exp
 /**
  * Computes a composite match score for a candidate AnyType object against an extracted entity.
  *
- * Signals and weights (from research doc 04-data-assimilation):
+ * Signals and weights (tuned so exact name+type+recency = 0.85, the auto-resolve threshold):
  *
  * | Signal              | Weight |
  * |---------------------|--------|
- * | Name similarity     | 0.35   |
+ * | Name similarity     | 0.51   |
  * | Type match          | 0.15   |
- * | Relationship prox.  | 0.20   |
- * | Recency             | 0.15   |
- * | Frequency           | 0.10   |
- * | Context attributes  | 0.05   |
+ * | Recency             | 0.20   |
+ * | Relationship prox.  | 0.09   |
+ * | Frequency           | 0.03   |
+ * | Context attributes  | 0.02   |
  */
 class ScoringEngine(
     private val contextWindow: ContextWindow,
@@ -27,13 +27,22 @@ class ScoringEngine(
     private val weights: Weights = Weights()
 ) {
 
+    /**
+     * Signal weights (must sum to 1.0).
+     *
+     * Rationale: name similarity is the strongest identity signal (0.50) and should
+     * alone with type + recency exceed the auto-resolve threshold of 0.85:
+     *   exact name (1.0) + exact type (1.0) + recent (1.0) = 0.51+0.15+0.20 = 0.86
+     * Proximity and frequency are secondary signals; they boost confidence but are
+     * insufficient on their own to trigger auto-resolution.
+     */
     data class Weights(
-        val nameSimilarity: Float = 0.35f,
+        val nameSimilarity: Float = 0.51f,
         val typeMatch: Float = 0.15f,
-        val proximity: Float = 0.20f,
-        val recency: Float = 0.15f,
-        val frequency: Float = 0.10f,
-        val attributes: Float = 0.05f
+        val proximity: Float = 0.09f,
+        val recency: Float = 0.20f,
+        val frequency: Float = 0.03f,
+        val attributes: Float = 0.02f
     )
 
     /**

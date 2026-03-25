@@ -27,7 +27,7 @@ class RoomPipelineEventStore @Inject constructor(
         dao.getEventsForTrace(traceId).map { entities ->
             entities.map { entity ->
                 val meta: Map<String, String> = runCatching {
-                    Json.decodeFromString(entity.metadataJson)
+                    Json.decodeFromString<Map<String, String>>(entity.metadataJson)
                 }.getOrDefault(emptyMap())
                 entity.toDomain(meta)
             }
@@ -39,7 +39,7 @@ class RoomPipelineEventStore @Inject constructor(
     override suspend fun getFailures(sinceMs: Long): List<PipelineEvent> =
         dao.getFailures(sinceMs).map { entity ->
             val meta: Map<String, String> = runCatching {
-                Json.decodeFromString(entity.metadataJson)
+                Json.decodeFromString<Map<String, String>>(entity.metadataJson)
             }.getOrDefault(emptyMap())
             entity.toDomain(meta)
         }

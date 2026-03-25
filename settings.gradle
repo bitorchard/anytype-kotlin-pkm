@@ -19,7 +19,13 @@ dependencyResolutionManagement {
      */
     def githubProperties = new Properties()
     def githubPropertiesFile = file("$rootDir${File.separator}github.properties")
-    githubProperties.load(new FileInputStream(githubPropertiesFile))
+    if (githubPropertiesFile.exists()) {
+        githubProperties.load(new FileInputStream(githubPropertiesFile))
+    } else {
+        // Allow local builds without GitHub credentials (pebble modules work without middleware)
+        githubProperties['gpr.usr'] = System.getenv('GPR_USER') ?: ''
+        githubProperties['gpr.key'] = System.getenv('GPR_TOKEN') ?: ''
+    }
 
     repositories {
         mavenLocal()

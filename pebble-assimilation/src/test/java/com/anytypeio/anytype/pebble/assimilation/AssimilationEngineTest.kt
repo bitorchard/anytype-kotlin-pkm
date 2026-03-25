@@ -2,7 +2,6 @@ package com.anytypeio.anytype.pebble.assimilation
 
 import com.anytypeio.anytype.core_models.primitives.SpaceId
 import com.anytypeio.anytype.pebble.assimilation.context.ContextWindow
-import com.anytypeio.anytype.pebble.assimilation.extraction.EntityExtractor
 import com.anytypeio.anytype.pebble.assimilation.llm.LlmException
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractedEntity
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractionResult
@@ -15,7 +14,6 @@ import com.anytypeio.anytype.pebble.core.AssimilationResult
 import com.anytypeio.anytype.pebble.core.RawVoiceInput
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -25,10 +23,15 @@ import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
+/**
+ * Uses [FakeEntityExtractionService] and [FakeEntityResolutionService] instead of
+ * Mockito mocks to avoid the `@JvmInline` SpaceId / coroutine matcher incompatibility.
+ * [PlanGenerator] and [ChangeStore] are plain Mockito mocks (no inline class parameters).
+ */
 class AssimilationEngineTest {
 
-    private val entityExtractor: EntityExtractor = mock()
-    private val entityResolver: EntityResolver = mock()
+    private val entityExtractor = FakeEntityExtractionService()
+    private val entityResolver = FakeEntityResolutionService()
     private val planGenerator: PlanGenerator = mock()
     private val changeStore: ChangeStore = mock()
     private val contextWindow: ContextWindow = mock()
@@ -38,11 +41,14 @@ class AssimilationEngineTest {
     private val input = RawVoiceInput(
         id = "input-001",
         traceId = "trace-001",
-        text = "Aarav has a basketball game on Friday"
+        text = "Aarav has a basketball game on Friday",
+        receivedAt = 0L
     )
 
     @Before
     fun setup() {
+        entityExtractor.calls.clear()
+        entityResolver.resolveCallCount = 0
         engine = AssimilationEngine(entityExtractor, entityResolver, planGenerator, changeStore, contextWindow)
     }
 
@@ -58,8 +64,9 @@ class AssimilationEngineTest {
             resolutionResult.resolved, extraction,
             spaceId = space.id, sourceText = input.text
         )
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(resolutionResult)
+
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(resolutionResult)
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenReturn("saved-cs-001")
 
@@ -73,8 +80,7 @@ class AssimilationEngineTest {
 
     @Test
     fun `LLM network exception returns Offline`() = runTest {
-        whenever(entityExtractor.extract(any(), any()))
-            .thenThrow(LlmException.NetworkException("no network"))
+        entityExtractor.enqueueError(LlmException.NetworkException("no network"))
 
         val result = engine.process(input, space)
 
@@ -84,8 +90,7 @@ class AssimilationEngineTest {
 
     @Test
     fun `LLM auth exception returns non-retryable Failure`() = runTest {
-        whenever(entityExtractor.extract(any(), any()))
-            .thenThrow(LlmException.AuthException("401 rejected"))
+        entityExtractor.enqueueError(LlmException.AuthException("401 rejected"))
 
         val result = engine.process(input, space)
 
@@ -95,8 +100,7 @@ class AssimilationEngineTest {
 
     @Test
     fun `LLM rate limit exception returns retryable Failure`() = runTest {
-        whenever(entityExtractor.extract(any(), any()))
-            .thenThrow(LlmException.RateLimitException("429 rate limit"))
+        entityExtractor.enqueueError(LlmException.RateLimitException("429 rate limit"))
 
         val result = engine.process(input, space)
 
@@ -106,8 +110,7 @@ class AssimilationEngineTest {
 
     @Test
     fun `empty extraction returns non-retryable Failure`() = runTest {
-        whenever(entityExtractor.extract(any(), any()))
-            .thenReturn(ExtractionResult(emptyList(), emptyList()))
+        entityExtractor.enqueue(ExtractionResult(emptyList(), emptyList()))
 
         val result = engine.process(input, space)
 
@@ -128,8 +131,9 @@ class AssimilationEngineTest {
             resolutionResult.resolved, extraction,
             spaceId = space.id, sourceText = input.text
         )
-        whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
-        whenever(entityResolver.resolve(any(), any())).thenReturn(resolutionResult)
+
+        entityExtractor.enqueue(extraction)
+        entityResolver.willReturn(resolutionResult)
         whenever(planGenerator.generate(any(), any(), any(), any(), any(), any(), any())).thenReturn(plan)
         whenever(changeStore.save(any())).thenThrow(RuntimeException("DB error"))
 

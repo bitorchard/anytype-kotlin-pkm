@@ -25,6 +25,7 @@ class PebbleErrorNotification @Inject constructor(private val context: Context) 
     companion object {
         const val CHANNEL_ID = "PEBBLE_ERROR"
         const val CHANNEL_NAME = "Pebble Errors"
+        const val EXTRA_PEBBLE_DESTINATION = "pebble_destination"
 
         private const val ID_API_KEY = 10_001
         private const val ID_RATE_LIMIT = 10_002
@@ -196,10 +197,6 @@ class PebbleErrorNotification @Inject constructor(private val context: Context) 
             flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
             putExtra(EXTRA_PEBBLE_DESTINATION, destination.name)
         } ?: Intent()
-    }
-
-    companion object {
-        const val EXTRA_PEBBLE_DESTINATION = "pebble_destination"
     }
 }
 

@@ -12,7 +12,12 @@ object NameSimilarity {
     /**
      * Combined similarity score in the range [0.0, 1.0].
      *
-     * Weighted 60% normalised Levenshtein + 40% token-overlap Jaccard.
+     * Weighted 90% normalised Levenshtein + 10% token-overlap Jaccard.
+     *
+     * The edit-distance signal is dominant so that single-character misspellings
+     * ("Arav" → "Aarav", LD=1/max=5 → editSim=0.80) score 0.72, well above the
+     * disambiguation threshold of 0.50. Token overlap handles multi-word name
+     * variants ("Dr. Patel" → "Patel") as a secondary signal.
      */
     fun score(a: String, b: String): Float {
         if (a.isBlank() || b.isBlank()) return 0f
@@ -26,7 +31,7 @@ object NameSimilarity {
 
         val editSim = 1f - (levenshtein(x, y).toFloat() / maxOf(x.length, y.length))
         val tokenSim = tokenOverlap(x, y)
-        return 0.60f * editSim + 0.40f * tokenSim
+        return 0.90f * editSim + 0.10f * tokenSim
     }
 
     /**
