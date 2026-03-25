@@ -114,7 +114,7 @@ class PipelineE2ETest {
             ExtractedEntity("e2", "ot-sport", "basketball")
         )
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.92f)
-        val plan = AssimilationPlan(listOf(createOp()), emptyList(), metadata(0.92f))
+        val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.92f))
 
         whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
         whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
@@ -131,7 +131,7 @@ class PipelineE2ETest {
     fun `pipeline records observability events for all stages`() = runTest {
         val entities = listOf(ExtractedEntity("e1", "ot-human", "Aarav"))
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.85f)
-        val plan = AssimilationPlan(listOf(createOp()), emptyList(), metadata(0.85f))
+        val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.85f))
 
         whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
         whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
@@ -161,7 +161,7 @@ class PipelineE2ETest {
 
         val entities = listOf(ExtractedEntity("e1", "ot-human", "Aarav"))
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.95f)
-        val plan = AssimilationPlan(listOf(createOp()), emptyList(), metadata(0.95f))
+        val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.95f))
 
         whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
         whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
@@ -185,7 +185,7 @@ class PipelineE2ETest {
 
         val entities = listOf(ExtractedEntity("e1", "ot-human", "Aarav", confidence = 0.60f))
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.65f)
-        val plan = AssimilationPlan(listOf(createOp()), emptyList(), metadata(0.65f))
+        val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.65f))
 
         whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
         whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
@@ -275,7 +275,7 @@ class PipelineE2ETest {
     fun `change store persistence failure returns retryable Failure`() = runTest {
         val entities = listOf(ExtractedEntity("e1", "ot-human", "Aarav"))
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.90f)
-        val plan = AssimilationPlan(listOf(createOp()), emptyList(), metadata(0.90f))
+        val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.90f))
 
         whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
         whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))
@@ -294,7 +294,7 @@ class PipelineE2ETest {
     fun `context window is updated after successful processing`() = runTest {
         val entities = listOf(ExtractedEntity("e1", "ot-human", "Aarav"))
         val extraction = ExtractionResult(entities, emptyList(), overallConfidence = 0.88f)
-        val plan = AssimilationPlan(listOf(createOp()), emptyList(), metadata(0.88f))
+        val plan = AssimilationPlan(operations = listOf(createOp()), metadata = metadata(0.88f))
 
         whenever(entityExtractor.extract(any(), any())).thenReturn(extraction)
         whenever(entityResolver.resolve(any(), any())).thenReturn(stubbedResolution(entities))

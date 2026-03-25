@@ -23,7 +23,10 @@ data class ChangeSetCache(
     @ColumnInfo(name = "applied_at") val appliedAt: Long?,
     @ColumnInfo(name = "rolled_back_at") val rolledBackAt: Long?,
     @ColumnInfo(name = "error_message") val errorMessage: String?,
-    @ColumnInfo(name = "operation_count") val operationCount: Int
+    @ColumnInfo(name = "operation_count") val operationCount: Int,
+    /** JSON-serialised disambiguation choices (opaque; typed by pebble-assimilation). */
+    @ColumnInfo(name = "disambiguation_choices_json", defaultValue = "")
+    val disambiguationChoicesJson: String = ""
 )
 
 /**

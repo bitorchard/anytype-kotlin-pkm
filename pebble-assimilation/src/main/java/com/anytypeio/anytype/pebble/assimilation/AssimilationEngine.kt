@@ -18,6 +18,7 @@ import com.anytypeio.anytype.pebble.core.observability.EventStatus
 import com.anytypeio.anytype.pebble.core.observability.PipelineEvent
 import com.anytypeio.anytype.pebble.core.observability.PipelineEventStore
 import com.anytypeio.anytype.pebble.core.observability.PipelineStage
+import com.anytypeio.anytype.pebble.assimilation.model.withDisambiguationChoices
 import com.anytypeio.anytype.core_models.primitives.SpaceId
 import timber.log.Timber
 import java.util.UUID
@@ -168,7 +169,7 @@ class AssimilationEngine @Inject constructor(
             operations = plan.operations.map { op -> op.copy(changeSetId = changeSetId) },
             metadata = plan.metadata,
             createdAt = System.currentTimeMillis()
-        )
+        ).withDisambiguationChoices(plan.disambiguationChoices)
 
         return try {
             val persistedId = changeStore.save(changeSet)

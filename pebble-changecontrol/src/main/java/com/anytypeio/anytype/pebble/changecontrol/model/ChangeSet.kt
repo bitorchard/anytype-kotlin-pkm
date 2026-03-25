@@ -31,7 +31,16 @@ data class ChangeSet(
     val appliedAt: Long? = null,
     val rolledBackAt: Long? = null,
     /** Populated when status is APPLY_FAILED or PARTIALLY_ROLLED_BACK. */
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    /**
+     * JSON-serialised list of disambiguation choices that could not be auto-resolved.
+     * Stored as an opaque string so [pebble-changecontrol] has no compile-time
+     * dependency on the assimilation-layer types.
+     *
+     * Use the extension functions in `pebble-assimilation` (`ChangeSetExtensions.kt`)
+     * to encode/decode the typed [DisambiguationChoice] list.
+     */
+    val disambiguationChoicesJson: String = ""
 )
 
 @Serializable

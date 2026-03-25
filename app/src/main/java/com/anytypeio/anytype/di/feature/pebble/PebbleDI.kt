@@ -15,6 +15,7 @@ import com.anytypeio.anytype.feature.pebble.ui.changelog.ChangeSetDetailViewMode
 import com.anytypeio.anytype.feature.pebble.ui.dashboard.PebbleDashboardViewModel
 import com.anytypeio.anytype.feature.pebble.ui.debug.PebbleDebugViewModel
 import com.anytypeio.anytype.feature.pebble.ui.history.InputHistoryViewModel
+import com.anytypeio.anytype.feature.pebble.ui.manual.ManualInputViewModel
 import com.anytypeio.anytype.feature.pebble.ui.settings.PebbleSettingsRepository
 import com.anytypeio.anytype.feature.pebble.ui.settings.PebbleSettingsViewModel
 import com.anytypeio.anytype.feature.pebble.ui.settings.WebhookQrViewModel
@@ -28,6 +29,7 @@ import com.anytypeio.anytype.pebble.assimilation.llm.LlmClientConfig
 import com.anytypeio.anytype.pebble.assimilation.model.ExtractionResult
 import com.anytypeio.anytype.pebble.assimilation.plan.PlanGenerator
 import com.anytypeio.anytype.pebble.assimilation.resolution.EntityCache
+import com.anytypeio.anytype.pebble.assimilation.resolution.DisambiguationResolver
 import com.anytypeio.anytype.pebble.assimilation.resolution.EntityResolver
 import com.anytypeio.anytype.pebble.assimilation.resolution.ResolutionFeedbackDatabase
 import com.anytypeio.anytype.pebble.assimilation.resolution.ResolutionFeedbackStore
@@ -56,6 +58,7 @@ import com.anytypeio.anytype.pebble.webhook.queue.InputQueueDatabase
 import com.anytypeio.anytype.pebble.webhook.queue.PersistentInputQueue
 import com.anytypeio.anytype.pebble.webhook.server.WebhookServer
 import com.anytypeio.anytype.ui.pebble.ApprovalFragment
+import com.anytypeio.anytype.ui.pebble.ManualInputFragment
 import com.anytypeio.anytype.ui.pebble.ChangeLogFragment
 import com.anytypeio.anytype.ui.pebble.ChangeSetDetailFragment
 import com.anytypeio.anytype.ui.pebble.InputHistoryFragment
@@ -291,6 +294,10 @@ object PebbleInfraModule {
 
     @PebbleScope
     @Provides
+    fun disambiguationResolver(): DisambiguationResolver = DisambiguationResolver()
+
+    @PebbleScope
+    @Provides
     fun assimilationEngine(
         entityExtractor: EntityExtractor,
         entityResolver: EntityResolver,
@@ -355,8 +362,10 @@ object PebbleViewModelModule {
     @ViewModelKey(ApprovalViewModel::class)
     fun approvalVm(
         changeStore: ChangeStore,
-        changeExecutor: ChangeExecutor
-    ): ViewModel = ApprovalViewModel(changeStore, changeExecutor)
+        changeExecutor: ChangeExecutor,
+        disambiguationResolver: DisambiguationResolver,
+        feedbackStore: ResolutionFeedbackStore
+    ): ViewModel = ApprovalViewModel(changeStore, changeExecutor, disambiguationResolver, feedbackStore)
 
     @Provides
     @IntoMap
@@ -389,6 +398,11 @@ object PebbleViewModelModule {
         webhookServer: WebhookServer,
         inputQueue: InputQueue
     ): ViewModel = PebbleDebugViewModel(eventStore, webhookServer, inputQueue)
+
+    @Provides
+    @IntoMap
+    @ViewModelKey(ManualInputViewModel::class)
+    fun manualInputVm(inputQueue: InputQueue): ViewModel = ManualInputViewModel(inputQueue)
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -421,6 +435,7 @@ interface PebbleComponent {
     fun inject(fragment: PebbleSettingsFragment)
     fun inject(fragment: WebhookQrFragment)
     fun inject(fragment: PebbleDebugFragment)
+    fun inject(fragment: ManualInputFragment)
 }
 
 // endregion

@@ -23,6 +23,9 @@
         <action
             android:id="@+id/action_pebbleHome_to_pebbleDebug"
             app:destination="@id/pebbleDebug" />
+        <action
+            android:id="@+id/action_pebbleHome_to_manualInput"
+            app:destination="@id/manualInput" />
     </fragment>
 
     <fragment
@@ -87,5 +90,10 @@
             app:argType="string"
             android:defaultValue="" />
     </fragment>
+
+    <fragment
+        android:id="@+id/manualInput"
+        android:name="com.anytypeio.anytype.ui.pebble.ManualInputFragment"
+        android:label="ManualInput" />
 
 </navigation>

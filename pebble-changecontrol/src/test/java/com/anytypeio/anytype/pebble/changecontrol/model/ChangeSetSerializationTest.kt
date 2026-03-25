@@ -109,6 +109,25 @@ class ChangeSetSerializationTest {
     }
 
     @Test
+    fun `disambiguationChoicesJson field is preserved in ChangeSet round-trip`() {
+        val choices = """[{"entity":{"localRef":"e1","typeKey":"ot-human","name":"Alex"},"candidates":[],"allowCreateNew":true}]"""
+        val changeSet = ChangeSet(
+            id = "cs-disambig",
+            inputId = "input-002",
+            traceId = "trace-xyz",
+            status = ChangeSetStatus.PENDING,
+            summary = "Disambiguate Alex",
+            operations = emptyList(),
+            metadata = ChangeSetMetadata(spaceId = "space-1", sourceText = "Alex called"),
+            createdAt = 1711152000000L,
+            disambiguationChoicesJson = choices
+        )
+        val serialized = json.encodeToString(changeSet)
+        val deserialized = json.decodeFromString<ChangeSet>(serialized)
+        assertEquals(choices, deserialized.disambiguationChoicesJson)
+    }
+
+    @Test
     fun `ChangeOperation with inverse round-trips`() {
         val op = ChangeOperation(
             id = "op-1",

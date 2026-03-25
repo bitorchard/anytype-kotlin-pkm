@@ -100,7 +100,8 @@ class AnytypeChangeStore @Inject constructor(
         DETAIL_TRACE_ID to traceId,
         DETAIL_STATUS to status.name,
         DETAIL_SUMMARY to summary,
-        DETAIL_CREATED_AT to createdAt
+        DETAIL_CREATED_AT to createdAt,
+        DETAIL_DISAMBIGUATION_CHOICES to disambiguationChoicesJson.ifEmpty { null }
     )
 
     private fun ChangeOperation.toDetails(): Map<String, Any?> = mapOf(
@@ -133,5 +134,6 @@ class AnytypeChangeStore @Inject constructor(
         const val DETAIL_OP_BEFORE_STATE = "pkm-opBeforeState"
         const val DETAIL_OP_AFTER_STATE = "pkm-opAfterState"
         const val DETAIL_OP_RESULT_OBJECT_ID = "pkm-opResultObjectId"
+        const val DETAIL_DISAMBIGUATION_CHOICES = "pkm-disambiguationChoices"
     }
 }

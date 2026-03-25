@@ -46,6 +46,9 @@ class PebbleDashboardFragment : BaseComposeFragment() {
                 },
                 onNavigateToDebug = {
                     findNavController().navigate(R.id.action_pebbleHome_to_pebbleDebug)
+                },
+                onNavigateToManualInput = {
+                    findNavController().navigate(R.id.action_pebbleHome_to_manualInput)
                 }
             )
         }

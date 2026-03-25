@@ -42,7 +42,8 @@ fun PebbleDashboardScreen(
     onNavigateToApproval: () -> Unit,
     onNavigateToChangeLog: () -> Unit,
     onNavigateToSettings: () -> Unit,
-    onNavigateToDebug: () -> Unit
+    onNavigateToDebug: () -> Unit,
+    onNavigateToManualInput: () -> Unit = {}
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
 
@@ -92,6 +93,11 @@ fun PebbleDashboardScreen(
                     modifier = Modifier.weight(1f)
                 ) { Text("Settings") }
             }
+
+            OutlinedButton(
+                onClick = onNavigateToManualInput,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text("Test input (no Pebble ring required)") }
         }
     }
 }

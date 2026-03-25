@@ -1,11 +1,13 @@
 package com.anytypeio.anytype.pebble.assimilation.model
 
 import com.anytypeio.anytype.pebble.core.PebbleObject
+import kotlinx.serialization.Serializable
 
 /**
  * An existing AnyType object considered as a resolution candidate for an [ExtractedEntity],
  * together with its composite score and per-signal breakdown.
  */
+@Serializable
 data class ScoredCandidate(
     /** The existing AnyType object. */
     val object_: PebbleObject,
@@ -15,6 +17,7 @@ data class ScoredCandidate(
     val signals: SignalBreakdown
 )
 
+@Serializable
 data class SignalBreakdown(
     val nameSimilarity: Float = 0f,
     val typeMatch: Float = 0f,

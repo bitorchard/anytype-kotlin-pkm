@@ -96,7 +96,8 @@ class LocalChangeCache @Inject constructor(
         appliedAt = appliedAt,
         rolledBackAt = rolledBackAt,
         errorMessage = errorMessage,
-        operationCount = operations.size
+        operationCount = operations.size,
+        disambiguationChoicesJson = disambiguationChoicesJson
     )
 
     private fun ChangeOperation.toCache() = ChangeOperationCache(
@@ -123,7 +124,8 @@ class LocalChangeCache @Inject constructor(
         createdAt = createdAt,
         appliedAt = appliedAt,
         rolledBackAt = rolledBackAt,
-        errorMessage = errorMessage
+        errorMessage = errorMessage,
+        disambiguationChoicesJson = disambiguationChoicesJson
     )
 
     private fun ChangeOperationCache.toModel() = ChangeOperation(
