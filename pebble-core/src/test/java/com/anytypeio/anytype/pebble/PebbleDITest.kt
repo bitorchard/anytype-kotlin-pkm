@@ -67,3 +67,4 @@ class PebbleDITest {
         assertTrue(service is DefaultPebbleSearchService)
     }
 }
+

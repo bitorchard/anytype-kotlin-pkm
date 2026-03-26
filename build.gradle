@@ -35,6 +35,21 @@ def testDebugAll = tasks.create("testDebugAll")
 
 //https://www.droidcon.com/2022/03/11/reducing-gradle-boilerplate-in-multi-module-android-projects/
 subprojects { sub ->
+    // Ensure Kotlin bytecode target stays aligned (17) even when using a newer JDK
+    // for the Gradle toolchain (e.g. JDK 21+ in CI/dev environments).
+    sub.tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+        kotlinOptions {
+            jvmTarget = "17"
+        }
+    }
+
+    // Ensure Java bytecode target is also aligned (17), otherwise Kotlin/Javac
+    // tasks can end up with incompatible -jvm-target values on mixed-toolchain setups.
+    sub.tasks.withType(JavaCompile).configureEach {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
     project.plugins.whenPluginAdded { plugin ->
         if (plugin instanceof LibraryPlugin) {
 
@@ -67,7 +82,17 @@ subprojects { sub ->
                 }
 
                 kotlin {
-                    jvmToolchain(17)
+                    // Use the currently available JDK for the Gradle toolchain.
+                    // The project still compiles with target/source compatibility set to Java 17 above.
+                    jvmToolchain(JavaVersion.current().majorVersion as int)
+                }
+            }
+
+            // Keep Kotlin bytecode target aligned with the Java compile target (17),
+            // even when the build runs on a newer JDK (e.g. 21).
+            tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+                kotlinOptions {
+                    jvmTarget = "17"
                 }
             }
         }

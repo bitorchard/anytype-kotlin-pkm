@@ -52,7 +52,13 @@ apply from: "$rootDir/versioning.gradle"
 
 def apikeyPropertiesFile = rootProject.file("apikeys.properties")
 def apikeyProperties = new Properties()
-apikeyProperties.load(new FileInputStream(apikeyPropertiesFile))
+if (apikeyPropertiesFile.exists()) {
+    apikeyProperties.load(new FileInputStream(apikeyPropertiesFile))
+} else {
+    // Allow local builds/test runs without secret files.
+    // Pebble unit tests don't require any of these API keys at build time.
+    logger.warn("[build] apikeys.properties not found; using empty API key placeholders.")
+}
 
 def useReleaseKeystore = rootProject.file("scripts/release/app-release.jks").exists()
 
@@ -133,7 +139,7 @@ android {
             debuggable false
             buildConfigField "boolean", "SHOW_CHATS", "true"
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            buildConfigField("String", "AMPLITUDE_KEY", apikeyProperties['amplitude.release'])
+            buildConfigField("String", "AMPLITUDE_KEY", apikeyProperties.getProperty("amplitude.release", ""))
             if (useReleaseKeystore) {
                 signingConfig signingConfigs.release
             } else {
@@ -145,7 +151,7 @@ android {
             applicationIdSuffix ".dev"
             debuggable true
             buildConfigField "boolean", "SHOW_CHATS", "true"
-            buildConfigField("String", "AMPLITUDE_KEY", apikeyProperties['amplitude.debug'])
+            buildConfigField("String", "AMPLITUDE_KEY", apikeyProperties.getProperty("amplitude.debug", ""))
             //signingConfig signingConfigs.debug
             firebaseAppDistribution {
                 artifactType = "AAB"
