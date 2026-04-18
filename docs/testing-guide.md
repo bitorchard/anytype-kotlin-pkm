@@ -69,7 +69,7 @@ $ANDROID_HOME/cmdline-tools/latest/bin/avdmanager create avd \
     --device "pixel_6"
 
 # Start the emulator (headless)
-$ANDROID_HOME/emulator/emulator -avd Pebble_Test -no-window -no-audio &
+$ANDROID_HOME/emulator/emulator -avd Pebble_Test -no-audio -no-window &
 
 # Wait for boot
 $ANDROID_HOME/platform-tools/adb wait-for-device shell \
